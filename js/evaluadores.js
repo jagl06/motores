@@ -145,14 +145,28 @@ export function evalRun(p) {
   return out;
 }
 
+// Niveles de una placa. "/" separa niveles (230/460) y, dentro de un nivel, "-" es un rango
+// (208-230/460 son dos niveles: 208-230 y 460). Sin "/", el guion separa niveles (230-460).
+function niveles(txt) {
+  const s = String(txt || "");
+  const grupos = s.includes("/") ? s.split("/").map(x => x.split("-")) : s.split("-").map(x => [x]);
+  return grupos.map(gr => gr.map(num).filter(v => v != null)).filter(gr => gr.length);
+}
+
+// Corrección aprobada por ISELEC (2026-11-23): antes separaba por "/" y "-" a la vez y con
+// placa 208-230/460 · 60/30 A devolvía 30 A a 230 V.
 export function currentFLA(p) {
   const g = id => p.v[id];
-  const parts = String(g("aplaca") || "").split(/[\/\-]/).map(num).filter(v => v != null);
-  const vparts = String(g("vplaca") || "").split(/[\/\-]/).map(num).filter(v => v != null);
+  const A = niveles(g("aplaca")), V = niveles(g("vplaca"));
+  const parts = A.flat(), vparts = V.flat();
   if (!parts.length) return null;
   if (parts.length === 1 || vparts.length < 2) return parts[0];
   const vs = num(g("vserv")); if (!vs) return Math.min(...parts);
-  // corriente del voltaje de placa más cercano al de servicio
-  let best = 0; vparts.forEach((v, i) => { if (Math.abs(v - vs) < Math.abs(vparts[best] - vs)) best = i; });
-  return parts[Math.min(best, parts.length - 1)];
+  // nivel de voltaje de placa más cercano al de servicio
+  let gi = 0, vi = 0;
+  V.forEach((gr, i) => gr.forEach((v, j) => { if (Math.abs(v - vs) < Math.abs(V[gi][vi] - vs)) { gi = i; vi = j; } }));
+  const ga = A[Math.min(gi, A.length - 1)];
+  // corriente de ese nivel; si el nivel es un rango con una corriente por voltaje (62-60), la que corresponde;
+  // si no se puede emparejar, la menor (criterio conservador para detectar sobrecarga)
+  return ga.length === V[gi].length ? ga[vi] : ga.length === 1 ? ga[0] : Math.min(...ga);
 }

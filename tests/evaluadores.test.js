@@ -178,10 +178,21 @@ test("currentFLA: casos simples", () => {
   igual(currentFLA(P({ vplaca: "230/460", aplaca: "60/30" })), 30, "sin voltaje de servicio: la menor;");
   igual(currentFLA(P({ vplaca: "230/460", aplaca: "60,5/30,2", vserv: "230" })), 60.5);
 });
-// COMPORTAMIENTO ACTUAL DEL PROTOTIPO, PENDIENTE DE DECISIÓN DE ISELEC:
-// con tres voltajes y dos corrientes el índice se desalinea y a 230 V devuelve 30 A (debería ser 60 A).
-test("currentFLA: placa 208-230/460 con 60/30 a 230 V devuelve 30 A (defecto conocido)", () =>
-  igual(currentFLA(P({ vplaca: "208-230/460", aplaca: "60/30", vserv: "230" })), 30));
+// Corregido el 2026-11-23: el prototipo devolvía 30 A a 230 V con esta placa.
+test("currentFLA: placa con rango 208-230/460", () => {
+  const pl = (aplaca, vserv) => currentFLA(P({ vplaca: "208-230/460", aplaca, vserv }));
+  igual(pl("60/30", "230"), 60); igual(pl("60/30", "208"), 60); igual(pl("60/30", "220"), 60);
+  igual(pl("60/30", "460"), 30); igual(pl("60/30", "480"), 30);
+  igual(pl("62-60/30", "208"), 62, "una corriente por voltaje del rango;");
+  igual(pl("62-60/30", "230"), 60); igual(pl("62-60/30", "460"), 30);
+  igual(pl("60/30", ""), 30, "sin voltaje de servicio: la menor;");
+});
+test("currentFLA: guion como separador de niveles cuando no hay barra", () => {
+  igual(currentFLA(P({ vplaca: "230-460", aplaca: "60-30", vserv: "230" })), 60);
+  igual(currentFLA(P({ vplaca: "230-460", aplaca: "60-30", vserv: "460" })), 30);
+});
+test("arranque: 55 A a 230 V con placa 208-230/460 · 60/30 A queda dentro de la nominal", () =>
+  igual(estado(evalRun(P({ vplaca: "208-230/460", aplaca: "60/30", vserv: "230", ia: 55, ib: 55, ic: 55 })), "Corriente máx."), "ok"));
 
 /* ---------- texto del informe PDF ---------- */
 test("textoPDF: sustituye los símbolos que Helvetica no tiene", () => {
