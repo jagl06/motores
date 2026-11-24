@@ -1,0 +1,691 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}</style>
+</head>
+<body>
+<!-- Prototipo de referencia. Fuera de claude.ai el asistente IA queda desactivado (usa window.claude); en producción va por el proxy PHP. -->
+<title>Prueba de Motores ISELEC</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: una columna tipo libreta de campo; barra superior fija con avance, pasos como tarjetas de procedimiento, barra inferior de navegación al alcance del pulgar */
+:root{
+  --bg:#eef1f4; --panel:#ffffff; --ink:#15202b; --muted:#5a6876; --line:#d3dae1;
+  --accent:#b86e00; --accent-ink:#ffffff; --steel:#24384d;
+  --ok:#1f7a45; --ok-bg:#e3f3e9; --warn:#9a6400; --warn-bg:#fdf1d8; --fail:#b3261e; --fail-bg:#fbe4e2; --na-bg:#eceff2;
+  --f-head:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#10161c; --panel:#18212a; --ink:#e6ebf0; --muted:#97a5b2; --line:#2b3844;
+  --accent:#f0a32a; --accent-ink:#1a1100; --steel:#0b1218;
+  --ok:#5fcf8c; --ok-bg:#163223; --warn:#f2bd5b; --warn-bg:#352812; --fail:#ff8a80; --fail-bg:#3a1a18; --na-bg:#222c35; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#10161c; --panel:#18212a; --ink:#e6ebf0; --muted:#97a5b2; --line:#2b3844;
+  --accent:#f0a32a; --accent-ink:#1a1100; --steel:#0b1218;
+  --ok:#5fcf8c; --ok-bg:#163223; --warn:#f2bd5b; --warn-bg:#352812; --fail:#ff8a80; --fail-bg:#3a1a18; --na-bg:#222c35; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--steel)}
+.wrap{max-width:760px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--steel);color:#e9eef3}
+header.top .wrap{padding-block:10px;display:flex;flex-direction:column;gap:8px}
+.toprow{display:flex;align-items:center;gap:10px}
+.brand{font-family:var(--f-head);font-weight:700;font-size:20px;letter-spacing:.04em;text-transform:uppercase;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brand small{font-weight:500;color:#9fb2c4;letter-spacing:.02em;text-transform:none;font-size:15px;margin-left:6px}
+.iconbtn{background:transparent;border:1px solid #4b6278;color:#e9eef3;border-radius:6px;padding:6px 10px;font:500 13px var(--f-body);cursor:pointer}
+.iconbtn:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.progress{display:flex;gap:3px}
+.progress span{flex:1;height:5px;border-radius:2px;background:#3a4f63;cursor:pointer}
+.progress span.done{background:#7fa6c6}
+.progress span.cur{background:var(--accent)}
+.progress span.bad{background:#e0645a}
+.steplabel{font:500 12px var(--f-mono);color:#9fb2c4;display:flex;justify-content:space-between;gap:8px}
+main{padding-block:16px 120px}
+.banner{background:var(--warn-bg);color:var(--warn);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.banner b{font-weight:600}
+.banner button{margin-left:auto}
+.phase{font:600 12px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+h1.stitle{font-family:var(--f-head);font-weight:700;font-size:32px;line-height:1.05;margin:4px 0 6px;text-wrap:balance}
+.norma{font:400 12.5px var(--f-mono);color:var(--muted)}
+.intro{margin:12px 0 0;color:var(--ink);max-width:65ch}
+section.block{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin-top:14px}
+section.block h2{font-family:var(--f-head);font-weight:600;font-size:19px;letter-spacing:.02em;margin:0 0 10px;text-transform:uppercase;color:var(--muted)}
+.checks{display:flex;flex-direction:column;gap:2px}
+.check{display:flex;gap:10px;align-items:flex-start;padding:8px 4px;border-bottom:1px dashed var(--line);cursor:pointer}
+.check:last-child{border-bottom:0}
+.check input{width:22px;height:22px;flex:none;margin-top:1px;accent-color:var(--accent)}
+.check span{min-width:0}
+.fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field.wide{grid-column:1/-1}
+.field label{font-size:12.5px;color:var(--muted);font-weight:500}
+.field .inp{display:flex;align-items:stretch;border:1px solid var(--line);border-radius:7px;background:var(--bg);overflow:hidden}
+.field input,.field select,.field textarea{flex:1;min-width:0;border:0;background:transparent;color:var(--ink);font:500 16px var(--f-body);padding:9px 10px}
+.field input[type=number]{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.field .unit{font:400 13px var(--f-mono);color:var(--muted);padding:0 10px;display:flex;align-items:center;border-left:1px solid var(--line)}
+.field textarea{min-height:84px;resize:vertical}
+.hint{font-size:12px;color:var(--muted)}
+.evals{display:flex;flex-direction:column;gap:8px}
+.ev{display:grid;grid-template-columns:auto 1fr auto;gap:4px 10px;align-items:center;padding:9px 10px;border-radius:8px;background:var(--na-bg)}
+.ev .pill{font:600 11px var(--f-mono);letter-spacing:.06em;padding:3px 7px;border-radius:4px;text-transform:uppercase}
+.ev.ok{background:var(--ok-bg)} .ev.ok .pill{background:var(--ok);color:var(--panel)}
+.ev.warn{background:var(--warn-bg)} .ev.warn .pill{background:var(--warn);color:var(--panel)}
+.ev.fail{background:var(--fail-bg)} .ev.fail .pill{background:var(--fail);color:var(--panel)}
+.ev.na .pill{background:var(--muted);color:var(--panel)}
+.ev .lbl{font-weight:500;min-width:0}
+.ev .val{font:500 14px var(--f-mono);font-variant-numeric:tabular-nums;text-align:right}
+.ev .note{grid-column:2/-1;font-size:12.5px;color:var(--muted)}
+.diagram{font:500 14px var(--f-mono);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;white-space:pre-wrap}
+.photos{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.photos figure{margin:0;position:relative;width:96px;height:96px;border-radius:6px;overflow:hidden;border:1px solid var(--line)}
+.photos img{width:100%;height:100%;object-fit:cover}
+.photos button{position:absolute;top:3px;right:3px;background:rgba(0,0,0,.6);color:#fff;border:0;border-radius:4px;font-size:12px;padding:2px 6px;cursor:pointer}
+.btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:10px 14px;font:600 14px var(--f-body);cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn:disabled{opacity:.45;cursor:default}
+.filebtn{display:inline-flex;align-items:center;gap:6px}
+.toggle{display:flex;gap:10px;align-items:center;font-weight:500}
+.toggle input{width:22px;height:22px;accent-color:var(--accent)}
+nav.bottom{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--panel);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+nav.bottom .wrap{padding-block:10px;display:flex;gap:8px;align-items:center}
+nav.bottom .grow{flex:1}
+.fab{position:fixed;right:calc(16px + env(safe-area-inset-right,0px));bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:21;background:var(--steel);color:#fff;border:2px solid var(--accent);border-radius:28px;padding:11px 16px;font:600 14px var(--f-body);cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.sheet{position:fixed;inset:0;z-index:40;background:rgba(10,15,20,.5);display:flex;align-items:flex-end;justify-content:center}
+.sheet .card{background:var(--panel);width:100%;max-width:760px;max-height:86vh;border-radius:14px 14px 0 0;display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom,0px)}
+.sheet header{display:flex;align-items:center;gap:10px;padding:12px max(16px,env(safe-area-inset-left,0px)) 10px;border-bottom:1px solid var(--line)}
+.sheet header h3{margin:0;font-family:var(--f-head);font-size:22px;flex:1}
+.sheet .body{overflow:auto;padding:12px max(16px,env(safe-area-inset-right,0px)) 12px max(16px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:10px;flex:1;min-height:0}
+.msg{padding:9px 12px;border-radius:10px;max-width:92%;white-space:pre-wrap;min-width:0;overflow-wrap:anywhere}
+.msg.user{align-self:flex-end;background:var(--accent);color:var(--accent-ink)}
+.msg.ai{align-self:flex-start;background:var(--bg);border:1px solid var(--line)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:16px;padding:6px 10px;font-size:13px;cursor:pointer}
+.composer{display:flex;gap:8px;padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));border-top:1px solid var(--line)}
+.composer textarea{flex:1;min-width:0;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:15px var(--f-body);padding:8px 10px;resize:none;height:44px}
+.steplist{display:flex;flex-direction:column;gap:4px}
+.steplist button{display:grid;grid-template-columns:28px 1fr auto;gap:8px;align-items:center;text-align:left;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:500 14px var(--f-body);cursor:pointer}
+.steplist .n{font:500 12px var(--f-mono);color:var(--muted)}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--line)}
+.dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)} .dot.fail{background:var(--fail)}
+.reports button.rep{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;width:100%;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer;font:14px var(--f-body)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(140px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:8px;font-size:14px;z-index:50;max-width:calc(100% - 32px)}
+.summary-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
+.sbox{border-radius:8px;padding:10px;background:var(--na-bg)}
+.sbox b{display:block;font:700 26px var(--f-head)}
+.sbox.ok{background:var(--ok-bg);color:var(--ok)} .sbox.warn{background:var(--warn-bg);color:var(--warn)} .sbox.fail{background:var(--fail-bg);color:var(--fail)}
+@media (prefers-reduced-motion:no-preference){.sheet .card{animation:up .18s ease-out}@keyframes up{from{transform:translateY(24px);opacity:.6}}}
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <div class="toprow">
+      <div class="brand">ISELEC <small id="hdrMotor">Prueba de motor</small></div>
+      <button class="iconbtn" id="btnSteps" type="button">Pasos</button>
+      <button class="iconbtn" id="btnReports" type="button">Pruebas</button>
+    </div>
+    <div class="progress" id="progress"></div>
+    <div class="steplabel"><span id="stepCount"></span><span id="saveState">Guardado en este equipo</span></div>
+  </div>
+</header>
+
+<main class="wrap" id="main"></main>
+
+<button class="fab" id="fab" type="button">Asistente</button>
+
+<nav class="bottom"><div class="wrap">
+  <button class="btn" id="prev" type="button">Anterior</button>
+  <div class="grow"></div>
+  <button class="btn" id="pdfBtn" type="button">Informe PDF</button>
+  <button class="btn primary" id="next" type="button">Siguiente</button>
+</div></nav>
+
+<div class="sheet" id="sheetSteps" hidden><div class="card">
+  <header><h3>Pasos de la prueba</h3><button class="btn" data-close type="button">Cerrar</button></header>
+  <div class="body"><div class="steplist" id="stepList"></div></div>
+</div></div>
+
+<div class="sheet" id="sheetReports" hidden><div class="card">
+  <header><h3>Pruebas guardadas</h3><button class="btn" data-close type="button">Cerrar</button></header>
+  <div class="body">
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn primary" id="newTest" type="button">Nueva prueba</button>
+      <button class="btn" id="exportJson" type="button">Exportar datos (JSON)</button>
+      <label class="btn filebtn" for="importJson">Importar JSON</label>
+      <input type="file" id="importJson" accept="application/json,.json" hidden>
+    </div>
+    <div class="reports" id="reportList" style="display:flex;flex-direction:column;gap:6px"></div>
+    <p class="hint">En este prototipo las pruebas quedan en el almacenamiento del navegador de este celular. En la versión alojada se guardan en el servidor de ISELEC.</p>
+  </div>
+</div></div>
+
+<div class="sheet" id="sheetAI" hidden><div class="card">
+  <header><h3>Asistente técnico</h3><button class="btn" data-close type="button">Cerrar</button></header>
+  <div class="body" id="chat">
+    <div class="msg ai">Consulta lo que necesites durante la prueba. Veo los datos que llevas registrados y el paso en que estás.</div>
+    <div class="chips" id="aiChips"></div>
+  </div>
+  <form class="composer" id="aiForm">
+    <textarea id="aiInput" placeholder="Escribe tu consulta"></textarea>
+    <button class="btn primary" type="submit" id="aiSend">Enviar</button>
+  </form>
+</div></div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script>
+"use strict";
+/* ---------- utilidades ---------- */
+const $ = s => document.querySelector(s);
+const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const num = v => { if (v === "" || v == null) return null; const n = parseFloat(String(v).replace(",", ".")); return isNaN(n) ? null : n; };
+const fmt = (n, d=2) => n == null ? "s/d" : Number(n).toFixed(d);
+const store = {
+  get(k){ try { return JSON.parse(localStorage.getItem(k)); } catch(e){ return null; } },
+  set(k,v){ try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch(e){ return false; } }
+};
+function toast(t){ const el=$("#toast"); el.textContent=t; el.hidden=false; clearTimeout(toast._t); toast._t=setTimeout(()=>el.hidden=true,2600); }
+
+/* ---------- conexiones ---------- */
+const CONN = {
+  "6": {
+    "Estrella (Y)": "L1-T1   L2-T2   L3-T3\nUnir: T4-T5-T6",
+    "Delta (Δ)": "L1-T1-T6   L2-T2-T4   L3-T3-T5"
+  },
+  "12": {
+    "Y serie, alto voltaje": "L1-T1   L2-T2   L3-T3\nUnir: T4-T7  T5-T8  T6-T9\nUnir: T10-T11-T12",
+    "YY paralelo, bajo voltaje": "L1-T1-T7   L2-T2-T8   L3-T3-T9\nUnir: T4-T5-T6  y  T10-T11-T12",
+    "Δ serie, alto voltaje": "L1-T1-T12   L2-T2-T10   L3-T3-T11\nUnir: T4-T7  T5-T8  T6-T9",
+    "ΔΔ paralelo, bajo voltaje": "L1-T1-T6-T7-T12   L2-T2-T4-T8-T10   L3-T3-T5-T9-T11"
+  }
+};
+const WINDINGS = { "6": ["T1-T4","T2-T5","T3-T6"], "12": ["T1-T4","T2-T5","T3-T6","T7-T10","T8-T11","T9-T12"] };
+const CLASS_RISE = { A:60, B:80, F:105, H:125 }; // elevación permitida NEMA MG-1, FS 1.0, método de resistencia
+
+/* ---------- estado ---------- */
+function blankState(){
+  return { id: "P" + Date.now().toString(36), created: new Date().toISOString(), step: 0, vib: false,
+    v: { fecha: new Date().toISOString().slice(0,10), hilos: "12", clase: "F", vprueba: "500", base: "Rígida" },
+    c: {}, obs: {}, photos: {} };
+}
+function sampleState(){
+  const s = blankState();
+  s.id = "EJEMPLO"; s.sample = true; s.vib = true; s.step = 0;
+  Object.assign(s.v, { cliente:"Ejemplo: Planta de bombeo", sitio:"Cuarto de bombas 2", tag:"BBA-201", ot:"OT-0000", tecnico:"Técnico de ejemplo",
+    tamb:"31", hr:"78", fab:"WEG", modelo:"W22", serie:"1234567890", hp:"25", kw:"18.5", vplaca:"230/460", aplaca:"60/30", rpm:"1765", frame:"284T", fs:"1.15", clase:"F", hilos:"12",
+    conexion:"Y serie, alto voltaje", vserv:"460", carga:"70", tcarc:"58", tla:"61", tloa:"55", tbornes:"44", dtfases:"2.5",
+    vla_h:"2.1", vla_v:"1.6", vla_a:"1.2", vloa_h:"1.9", vloa_v:"1.4", vloa_a:"1.0", vibequipo:"(sin equipo, valores de ejemplo)",
+    twind:"30", r1:"0.62", r2:"0.63", r3:"0.62", r4:"0.62", r5:"0.64", r6:"0.62", vprueba:"500", ir1:"850", irab:"1200", irbc:"1150", irca:"1300", pi:"2.8", dar:"1.45",
+    vab:"462", vbc:"458", vca:"466", ia:"21.4", ib:"22.0", ic:"21.1" });
+  return s;
+}
+let S = store.get("pm_current") || sampleState();
+function save(){
+  S.updated = new Date().toISOString();
+  const ok = store.set("pm_current", S);
+  if (!S.sample) {
+    const list = store.get("pm_list") || {};
+    list[S.id] = S; if (!store.set("pm_list", list)) toast("Memoria llena: exporta y borra pruebas antiguas");
+  }
+  $("#saveState").textContent = ok ? (S.sample ? "Ejemplo, no se guarda en la lista" : "Guardado en este equipo") : "No se pudo guardar";
+}
+
+/* ---------- evaluadores ---------- */
+const E = (label, value, status, note) => ({ label, value, status, note });
+function g(id){ return S.v[id]; }
+
+function evalTermo(){
+  const out = [], ta = num(g("tamb"));
+  const dt = num(g("dtfases"));
+  if (dt != null) {
+    let st = dt <= 1 ? "ok" : dt <= 3 ? "warn" : dt <= 15 ? "warn" : "fail";
+    const note = dt <= 1 ? "Sin anomalía" : dt <= 3 ? "Posible deficiencia, investigar (NETA 1-3 °C)" : dt <= 15 ? "Deficiencia probable, reparar cuando sea posible (NETA 4-15 °C)" : "Discrepancia mayor, reparar de inmediato (NETA >15 °C)";
+    out.push(E("ΔT entre conexiones similares", fmt(dt,1)+" °C", st, note));
+  }
+  const tb = num(g("tbornes"));
+  if (tb != null && ta != null) {
+    const r = tb - ta; const st = r <= 10 ? "ok" : r <= 20 ? "warn" : "fail";
+    out.push(E("Caja de bornes sobre ambiente", fmt(r,1)+" °C", st, r<=10?"NETA 1-10 °C: posible deficiencia si hay punto caliente localizado":r<=20?"NETA 11-20 °C: deficiencia probable":"NETA >20 °C: monitorear o reparar según magnitud"));
+  }
+  for (const [id, nm] of [["tla","Rodamiento lado acople"],["tloa","Rodamiento lado opuesto"]]) {
+    const t = num(g(id)); if (t == null) continue;
+    const r = ta != null ? t - ta : null;
+    let st = "ok"; if ((r != null && r > 40) || t > 80) st = "warn"; if ((r != null && r > 50) || t > 95) st = "fail";
+    out.push(E(nm, fmt(t,1)+" °C", st, (r!=null?"Elevación "+fmt(r,1)+" °C. ":"")+"Criterio práctico: alerta >40 °C sobre ambiente u 80 °C; falla >50 °C u 95 °C"));
+  }
+  const tc = num(g("tcarc")), cls = g("clase");
+  if (tc != null && ta != null && CLASS_RISE[cls]) {
+    const r = tc - ta, lim = CLASS_RISE[cls];
+    const st = r < lim - 30 ? "ok" : r < lim - 10 ? "warn" : "fail";
+    out.push(E("Carcasa sobre ambiente", fmt(r,1)+" °C", st, "Clase "+cls+": elevación de devanado permitida "+lim+" °C (NEMA MG-1). La superficie está 10-30 °C por debajo del devanado; indicativo"));
+  }
+  return out;
+}
+function vibLimits(){
+  const kw = num(g("kw")) ?? (num(g("hp")) != null ? num(g("hp"))*0.746 : null);
+  const flex = g("base") === "Flexible";
+  if (kw == null) return null;
+  if (kw < 15) return { std:"ISO 10816-1 clase I (<15 kW)", ab:0.71, bc:1.8, cd:4.5 };
+  if (kw <= 300) return flex ? { std:"ISO 20816-3 grupo 2, base flexible", ab:2.3, bc:4.5, cd:7.1 } : { std:"ISO 20816-3 grupo 2, base rígida", ab:1.4, bc:2.8, cd:4.5 };
+  return flex ? { std:"ISO 20816-3 grupo 1, base flexible", ab:3.5, bc:7.1, cd:11.0 } : { std:"ISO 20816-3 grupo 1, base rígida", ab:2.3, bc:4.5, cd:7.1 };
+}
+function evalVib(){
+  if (!S.vib) return [E("Módulo de vibración", "no aplicado", "na", "Se activará cuando ISELEC cuente con equipo")];
+  const L = vibLimits(); if (!L) return [E("Límites", "s/d", "na", "Ingresa la potencia en datos de placa")];
+  const ids = ["vla_h","vla_v","vla_a","vloa_h","vloa_v","vloa_a"];
+  const vals = ids.map(i => num(g(i))).filter(v => v != null);
+  if (!vals.length) return [];
+  const mx = Math.max(...vals);
+  const zone = mx <= L.ab ? "A" : mx <= L.bc ? "B" : mx <= L.cd ? "C" : "D";
+  const st = zone === "A" || zone === "B" ? "ok" : zone === "C" ? "warn" : "fail";
+  const txt = {A:"Zona A: máquina nueva o recién reparada", B:"Zona B: aceptable para operación prolongada", C:"Zona C: no apta para operación prolongada, programar corrección", D:"Zona D: severidad que puede causar daño"}[zone];
+  return [E("Velocidad máx. RMS (10-1000 Hz)", fmt(mx,2)+" mm/s · zona "+zone, st, txt+". "+L.std+": A/B "+L.ab+", B/C "+L.bc+", C/D "+L.cd+" mm/s")];
+}
+function evalRes(){
+  const w = WINDINGS[g("hilos")] || WINDINGS["6"];
+  const vals = w.map((_, i) => num(g("r"+(i+1))));
+  const have = vals.filter(v => v != null);
+  if (have.length < 3) return [];
+  const out = [];
+  const tw = num(g("twind"));
+  const groups = g("hilos") === "12" ? [[0,1,2],[3,4,5]] : [[0,1,2]];
+  groups.forEach((gr, k) => {
+    const xs = gr.map(i => vals[i]).filter(v => v != null); if (xs.length < 3) return;
+    const avg = xs.reduce((a,b)=>a+b,0)/xs.length, dev = (Math.max(...xs)-Math.min(...xs))/avg*100;
+    const st = dev <= 2 ? "ok" : dev <= 5 ? "warn" : "fail";
+    out.push(E("Desbalance de resistencia" + (groups.length>1 ? (k? " (T7-T12)":" (T1-T6)") : ""), fmt(dev,2)+" %", st,
+      (dev<=2?"Dentro de 2 %":dev<=5?"Entre 2 y 5 %: revisar conexiones y puntos de medición":"Mayor a 5 %: posible espira en corto, conexión floja o error de conexión")+". Promedio "+fmt(avg,3)+" Ω"+(tw!=null?" · a 25 °C: "+fmt(avg*(234.5+25)/(234.5+tw),3)+" Ω":"")));
+  });
+  if (have.some(v => v < 1)) out.push(E("Resolución del instrumento", "0.1 Ω", "warn", "El Fluke 1587 FC resuelve 0.1 Ω. Con devanados menores a 1 Ω el desbalance no es confiable: usar micro-ohmímetro (método de 4 hilos)"));
+  return out;
+}
+function r40(v){ const tw = num(g("twind")); if (v == null || tw == null) return null; return v * Math.pow(0.5, (40 - tw)/10); }
+function evalIR(){
+  const out = []; const ir = num(g("ir1"));
+  if (ir != null) {
+    const c = r40(ir); const val = c ?? ir;
+    const st = val >= 100 ? "ok" : val >= 5 ? "warn" : "fail";
+    out.push(E("IR 1 min fases-tierra", fmt(ir,0)+" MΩ" + (c!=null?" · "+fmt(c,0)+" MΩ a 40 °C":""), st,
+      val>=100?"Cumple IEEE 43 (mín. 5 MΩ, devanado aleatorio <1 kV) con margen amplio":val>=5?"Cumple el mínimo de IEEE 43 (5 MΩ) pero es bajo: evaluar secado y tendencia":"No cumple IEEE 43: no energizar. Limpiar, secar y repetir"));
+    if (c == null) out.push(E("Corrección por temperatura", "falta T devanado", "na", "Ingresa la temperatura del devanado para corregir a 40 °C"));
+  }
+  for (const [id, nm] of [["irab","IR fase-fase A-B"],["irbc","IR fase-fase B-C"],["irca","IR fase-fase C-A"]]) {
+    const v = num(g(id)); if (v == null) continue; const c = r40(v) ?? v;
+    out.push(E(nm, fmt(v,0)+" MΩ", c >= 100 ? "ok" : c >= 5 ? "warn" : "fail", "Mismo mínimo que fases-tierra"));
+  }
+  return out;
+}
+function evalPI(){
+  const out = []; const pi = num(g("pi")), dar = num(g("dar")), ir = num(g("ir1"));
+  const minPI = g("clase") === "A" ? 1.5 : 2.0;
+  if (pi != null) {
+    let st = pi >= minPI ? "ok" : pi >= 1.0 ? "warn" : "fail", note = pi >= minPI ? "Cumple IEEE 43 (mín. "+minPI+" para clase "+g("clase")+")" : pi >= 1 ? "Bajo el mínimo IEEE 43: humedad o contaminación probable" : "PI < 1: aislamiento deteriorado, no energizar";
+    if (ir != null && (r40(ir) ?? ir) > 5000) { st = "ok"; note = "IR 1 min > 5000 MΩ: IEEE 43 considera el PI no concluyente; el valor se registra como informativo"; }
+    out.push(E("Índice de polarización (10/1 min)", fmt(pi,2), st, note));
+  }
+  if (dar != null) {
+    const st = dar >= 1.25 ? "ok" : dar >= 1.0 ? "warn" : "fail";
+    out.push(E("DAR (60/30 s)", fmt(dar,2), st, dar>=1.6?"Excelente (>1.6)":dar>=1.25?"Aceptable (1.25-1.6)":dar>=1?"Cuestionable (1.0-1.25)":"Deficiente (<1.0)"));
+  }
+  return out;
+}
+function evalRun(){
+  const out = []; const vs = ["vab","vbc","vca"].map(i=>num(g(i)));
+  if (vs.every(v => v != null)) {
+    const a = vs.reduce((x,y)=>x+y,0)/3, u = Math.max(...vs.map(v=>Math.abs(v-a)))/a*100;
+    out.push(E("Desbalance de voltaje", fmt(u,2)+" %", u<=1?"ok":u<=5?"warn":"fail", (u<=1?"Dentro de 1 %":u<=5?"Entre 1 y 5 %: aplicar factor de reducción de potencia (NEMA MG-1 14.36)":"Mayor a 5 %: NEMA MG-1 no recomienda operar")+". Promedio "+fmt(a,1)+" V"));
+    const vn = num(g("vserv")); if (vn) { const d = (a-vn)/vn*100; out.push(E("Voltaje vs. nominal", fmt(d,1)+" %", Math.abs(d)<=10?"ok":"fail", "NEMA MG-1 12.44: ±10 % del nominal")); }
+  }
+  const is = ["ia","ib","ic"].map(i=>num(g(i)));
+  if (is.every(v => v != null)) {
+    const a = is.reduce((x,y)=>x+y,0)/3, u = Math.max(...is.map(v=>Math.abs(v-a)))/a*100;
+    out.push(E("Desbalance de corriente", fmt(u,2)+" %", u<=5?"ok":u<=10?"warn":"fail", "Criterio práctico: ≤5 % normal, 5-10 % investigar, >10 % corregir. Suele ser 6 a 10 veces el desbalance de voltaje"));
+    const fla = currentFLA(), fs = num(g("fs")) || 1;
+    if (fla) { const mx = Math.max(...is); out.push(E("Corriente máx. vs. placa", fmt(mx,1)+" / "+fmt(fla,1)+" A", mx<=fla?"ok":mx<=fla*fs?"warn":"fail", mx<=fla?"Dentro de la corriente nominal":mx<=fla*fs?"Opera dentro del factor de servicio":"Supera FLA × FS: sobrecarga")); }
+  }
+  return out;
+}
+function currentFLA(){
+  const parts = String(g("aplaca")||"").split(/[\/\-]/).map(num).filter(v=>v!=null);
+  const vparts = String(g("vplaca")||"").split(/[\/\-]/).map(num).filter(v=>v!=null);
+  if (!parts.length) return null;
+  if (parts.length === 1 || vparts.length < 2) return parts[0];
+  const vs = num(g("vserv")); if (!vs) return Math.min(...parts);
+  // corriente del voltaje de placa más cercano al de servicio
+  let best = 0; vparts.forEach((v,i)=>{ if (Math.abs(v-vs) < Math.abs(vparts[best]-vs)) best = i; });
+  return parts[Math.min(best, parts.length-1)];
+}
+
+/* ---------- definición del protocolo ---------- */
+const STEPS = [
+ { id:"general", phase:"Preparación", title:"Datos de la orden", norma:"Registro general",
+   intro:"Identifica el equipo y anota las condiciones ambientales. La humedad relativa y la temperatura afectan la lectura de aislamiento.",
+   fields:[["cliente","Cliente","text",null,"wide"],["sitio","Ubicación / área","text"],["tag","TAG del equipo","text"],["ot","Orden de trabajo","text"],["fecha","Fecha","date"],
+     ["tecnico","Técnico","text"],["supervisor","Supervisor","text"],["tamb","T ambiente","number","°C"],["hr","Humedad relativa","number","%"]] },
+ { id:"placa", phase:"Preparación", title:"Datos de placa y conexión", norma:"NEMA MG-1",
+   intro:"Copia la placa completa y toma foto. Define con cuántos hilos sale el motor y con qué conexión va a operar al voltaje de servicio.",
+   fields:[["fab","Fabricante","text"],["modelo","Modelo","text"],["serie","N.º de serie","text"],["hp","Potencia","number","HP"],["kw","Potencia","number","kW"],
+     ["vplaca","Voltaje de placa","text",null,null,"Ej. 230/460"],["aplaca","Corriente de placa","text",null,null,"Ej. 60/30"],["rpm","Velocidad","number","rpm"],["frame","Armazón (frame)","text"],
+     ["fs","Factor de servicio","number"],["clase","Clase de aislamiento","select",["A","B","F","H"]],["diseno","Diseño NEMA","select",["","A","B","C","D"]],
+     ["hilos","Hilos de salida","select",["6","12"]],["conexion","Conexión de servicio","conn"],["vserv","Voltaje de servicio","number","V"]],
+   extra: () => { const d = (CONN[g("hilos")]||{})[g("conexion")]; return d ? `<section class="block"><h2>Diagrama de conexión</h2><div class="diagram">${esc(d)}</div><p class="hint">Marcado NEMA. Verifica siempre contra el diagrama de la placa del fabricante.</p></section>` : ""; } },
+ { id:"seguridad", phase:"En operación", title:"Seguridad para mediciones en operación", norma:"NFPA 70E-2024, 110.5 y 130",
+   intro:"La termografía y la vibración se toman con el motor en marcha y antes de desenergizar. Si se abre la caja de bornes o un tablero energizado, aplica el EPP del análisis de arco.",
+   checks:["Permiso de trabajo y análisis de riesgo firmados","Etiqueta de arco del tablero/arrancador revisada (energía incidente y frontera)","EPP de arco según etiqueta o tabla 130.7(C)(15) puesto y en buen estado","Frontera de aproximación delimitada","Guardas de partes rotativas instaladas; ropa y cabello sin riesgo de atrapamiento"],
+   fields:[["epp","Categoría EPP / energía incidente","text"],["frontera","Frontera de arco","text"]] },
+ { id:"termo", phase:"En operación", title:"Termografía y temperaturas", norma:"NETA MTS-2023 tabla 100.18 · NEMA MG-1",
+   intro:"Con el motor a carga estable al menos 30 minutos. Usa la cámara para ubicar puntos calientes y el termómetro IR para leer rodamientos y carcasa. Ajusta la emisividad (pintura ≈ 0.95; metal desnudo da lecturas falsas bajas).",
+   checks:["Emisividad y temperatura reflejada configuradas en la cámara","Imagen de carcasa completa","Imagen de caja de bornes y conexiones (si se puede abrir con seguridad)","Imagen de alimentación en arrancador / VFD","Rodamientos medidos con termómetro IR en el mismo punto de referencia"],
+   fields:[["carga","Carga aproximada","number","%"],["tcarc","T máx. carcasa","number","°C"],["tla","T rodamiento lado acople","number","°C"],["tloa","T rodamiento lado opuesto","number","°C"],["tbornes","T máx. caja de bornes","number","°C"],["dtfases","ΔT entre conexiones similares","number","°C",null,"Máx. menos mín. entre fases"]],
+   evaluate: evalTermo, photos:true },
+ { id:"vibracion", phase:"En operación", title:"Vibración", norma:"ISO 20816-3:2022 · ISO 10816-1", optional:true,
+   intro:"Velocidad RMS de 10 a 1000 Hz en las tapas de rodamiento, en tres ejes. Mismo punto marcado en cada inspección para comparar tendencia.",
+   checks:["Puntos marcados en tapas de rodamiento (LA y LOA)","Sensor con base magnética sobre superficie plana y limpia","Motor a velocidad y carga normales"],
+   fields:[["base","Tipo de base","select",["Rígida","Flexible"]],["vibequipo","Equipo utilizado","text"],["vla_h","LA horizontal","number","mm/s"],["vla_v","LA vertical","number","mm/s"],["vla_a","LA axial","number","mm/s"],
+     ["vloa_h","LOA horizontal","number","mm/s"],["vloa_v","LOA vertical","number","mm/s"],["vloa_a","LOA axial","number","mm/s"]],
+   evaluate: evalVib },
+ { id:"loto", phase:"Desenergizado", title:"Desenergización y bloqueo", norma:"NFPA 70E-2024, 120.5 · OSHA 1910.147",
+   intro:"Establece la condición de trabajo eléctricamente segura antes de abrir la caja de bornes o desconectar cables.",
+   checks:["Motor detenido y fuentes identificadas (incluye VFD, capacitores de corrección y calefactores de espacio)","Interruptor abierto y verificado visualmente","Candado y etiqueta personales colocados","Detector de tensión probado en fuente conocida antes y después (vivo-muerto-vivo)","Ausencia de tensión verificada fase-fase y fase-tierra en bornes del motor","Capacitores y VFD descargados; tiempo de espera del fabricante cumplido"],
+   fields:[["bloqueo","Punto de bloqueo","text"],["candado","N.º de candado / etiqueta","text"]] },
+ { id:"limpieza", phase:"Desenergizado", title:"Limpieza", norma:"EASA AR100 · OSHA 1910.242(b)",
+   intro:"Limpia antes de medir aislamiento: polvo húmedo y grasa en la caja de bornes bajan la lectura. Foto antes y después.",
+   checks:["Rejillas y aletas de carcasa libres de polvo y residuos","Cubierta y aspas del ventilador limpias","Caja de bornes limpia y seca, empaque en buen estado","Aire comprimido seco a 30 psi máx. en boquilla, con careta (OSHA 1910.242(b))","Solvente dieléctrico sin residuos; no usar agua a presión","Drenajes de condensado destapados"],
+   fields:[["metodo","Método de limpieza","select",["Aire seco + brocha","Aspiradora","Solvente dieléctrico","Combinado"]]], photos:true },
+ { id:"inspeccion", phase:"Desenergizado", title:"Inspección mecánica y de bornes", norma:"NETA MTS-2023, 7.15.1",
+   intro:"Inspección visual y manual con el motor bloqueado.",
+   checks:["Eje gira libre a mano, sin roce ni ruido de rodamiento","Juego axial y radial normal","Anclaje y pernos de base apretados; sin pata coja aparente","Acople y alineación sin daño visible","Cables de salida sin resequedad, grietas ni sobrecalentamiento","Terminales y conectores sin corrosión; marcado legible","Carcasa sin fisuras; placa legible; puesta a tierra conectada"],
+   fields:[["estado_mec","Estado general","select",["Bueno","Regular","Malo"]]], photos:true },
+ { id:"terminales", phase:"Desenergizado", title:"Separación e identificación de hilos", norma:"NEMA MG-1 parte 2",
+   intro:"Desconecta los hilos del motor de la alimentación y entre sí. Con 6 o 12 hilos separados se puede probar cada devanado y el aislamiento entre fases.",
+   checksFn: () => (WINDINGS[g("hilos")]||[]).map(w => "Continuidad del devanado " + w),
+   extraChecks:["Hilos marcados con su número (T1 a T6 o T1 a T12) al separarlos","Cables de alimentación aislados y fuera de alcance"] },
+ { id:"resistencia", phase:"Desenergizado", title:"Resistencia de devanados", norma:"IEEE 118 · NETA MTS 7.15.1",
+   intro:"Mide cada devanado entre sus dos extremos. Anota la temperatura del devanado (o la ambiente si el motor lleva horas parado) para corregir a 25 °C.",
+   checks:["Puntas en cero (resta la resistencia de las puntas)","Mismo punto de contacto en cada terminal"],
+   fieldsFn: () => [["twind","T devanado","number","°C"], ...(WINDINGS[g("hilos")]||[]).map((w,i)=>["r"+(i+1),"R "+w,"number","Ω"])],
+   evaluate: evalRes },
+ { id:"aislamiento", phase:"Desenergizado", title:"Resistencia de aislamiento", norma:"IEEE 43-2013",
+   intro:"Fluke 1587 FC a 500 V CC (IEEE 43 para devanados < 1000 V). Une todos los hilos y mide contra la carcasa a 1 minuto. Si los devanados están separados, mide también entre fases.",
+   checks:["Carcasa puesta a tierra; RTD y termistores a tierra","Todos los hilos unidos para fases-tierra","Superficie de bornes seca","Descargar el devanado al terminar cada prueba (mín. 4 veces el tiempo de prueba)"],
+   fields:[["vprueba","Voltaje de prueba","select",["500","1000","250"]],["twind","T devanado","number","°C"],["ir1","IR 1 min fases-tierra","number","MΩ"],["irab","IR A-B","number","MΩ"],["irbc","IR B-C","number","MΩ"],["irca","IR C-A","number","MΩ"]],
+   evaluate: evalIR },
+ { id:"pi", phase:"Desenergizado", title:"Índice de polarización y DAR", norma:"IEEE 43-2013",
+   intro:"Función PI/DAR del Fluke 1587 FC, 10 minutos a 500 V. Anota el PI y el DAR que muestra el equipo.",
+   checks:["Prueba completa de 10 min sin interrupción","Lecturas guardadas en el equipo / Fluke Connect"],
+   fields:[["pi","PI (R10/R1)","number"],["dar","DAR (R60/R30)","number"],["r10","R 10 min","number","MΩ"]],
+   evaluate: evalPI },
+ { id:"reconexion", phase:"Puesta en servicio", title:"Reconexión", norma:"NEMA MG-1 · NETA MTS",
+   intro:"Reconecta según el voltaje de servicio y la conexión de placa. Aísla cada unión y aprieta al torque del fabricante del conector.",
+   checks:["Conexión según diagrama de placa y voltaje de servicio","Uniones aisladas con cinta clase 130 °C o conectores aislados","Tapa de caja de bornes con empaque instalada","Puesta a tierra del motor reconectada","Herramientas retiradas; bloqueo liberado por quien lo colocó"],
+   extra: () => { const d = (CONN[g("hilos")]||{})[g("conexion")]; return d ? `<section class="block"><h2>${esc(g("conexion"))}</h2><div class="diagram">${esc(d)}</div></section>` : `<section class="block"><p class="hint">Define la conexión de servicio en Datos de placa para ver el diagrama.</p></section>`; } },
+ { id:"arranque", phase:"Puesta en servicio", title:"Arranque y verificación", norma:"NEMA MG-1 12.44 y 14.36",
+   intro:"Arranque en vacío si es posible y luego con carga. Voltajes con el Fluke 1587 FC; corrientes con pinza amperimétrica.",
+   checks:["Sentido de giro correcto","Sin ruido ni vibración anormal al arranque","Protección de sobrecarga ajustada a la corriente de placa"],
+   fields:[["vab","V L1-L2","number","V"],["vbc","V L2-L3","number","V"],["vca","V L3-L1","number","V"],["ia","I L1","number","A"],["ib","I L2","number","A"],["ic","I L3","number","A"]],
+   evaluate: evalRun },
+ { id:"dictamen", phase:"Cierre", title:"Dictamen e informe", norma:"",
+   intro:"Revisa el resumen, define el dictamen y escribe las recomendaciones. El informe PDF toma todo lo registrado.",
+   fields:[["dictamen","Dictamen","select",["","Apto para operar","Apto con observaciones","No apto"]],["proxima","Próxima prueba recomendada","date"],["recom","Recomendaciones","textarea",null,"wide"]],
+   extra: () => summaryHTML() }
+];
+function stepActive(st){ return !(st.optional && !S.vib) || true; }
+function stepEvals(st){ if (st.id === "vibracion") return evalVib(); return st.evaluate ? st.evaluate() : []; }
+function stepStatus(st){
+  const ev = stepEvals(st).map(e=>e.status);
+  if (ev.includes("fail")) return "fail"; if (ev.includes("warn")) return "warn"; if (ev.includes("ok")) return "ok"; return "";
+}
+function stepChecks(st){ return [...(st.checks||[]), ...(st.checksFn?st.checksFn():[]), ...(st.extraChecks||[])]; }
+function stepFields(st){ return st.fieldsFn ? st.fieldsFn() : (st.fields||[]); }
+function allEvals(){ return STEPS.flatMap(st => stepEvals(st).map(e => ({...e, step: st.title}))); }
+function suggested(){
+  const ev = allEvals().map(e=>e.status);
+  return ev.includes("fail") ? "No apto" : ev.includes("warn") ? "Apto con observaciones" : ev.includes("ok") ? "Apto para operar" : "";
+}
+function summaryHTML(){
+  const ev = allEvals(); const c = s => ev.filter(e=>e.status===s).length;
+  const bad = ev.filter(e => e.status === "fail" || e.status === "warn");
+  const sug = suggested();
+  return `<section class="block"><h2>Resumen</h2>
+    <div class="summary-grid"><div class="sbox ok"><b>${c("ok")}</b>Cumplen</div><div class="sbox warn"><b>${c("warn")}</b>Observación</div><div class="sbox fail"><b>${c("fail")}</b>No cumplen</div></div>
+    ${sug ? `<p>Dictamen sugerido por los criterios: <b>${esc(sug)}</b>. El técnico decide el dictamen final.</p>` : ""}
+    ${bad.length ? `<div class="evals">${bad.map(evHTML).join("")}</div>` : ""}</section>`;
+}
+function evHTML(e){
+  const t = {ok:"Cumple", warn:"Revisar", fail:"No cumple", na:"N/A"}[e.status] || "";
+  return `<div class="ev ${e.status}"><span class="pill">${t}</span><span class="lbl">${esc(e.label)}${e.step?` <span class="hint">· ${esc(e.step)}</span>`:""}</span><span class="val">${esc(e.value)}</span>${e.note?`<span class="note">${esc(e.note)}</span>`:""}</div>`;
+}
+
+/* ---------- render ---------- */
+function fieldHTML(f){
+  const [id, label, type, unitOrOpts, cls, hint] = f; const val = S.v[id] ?? "";
+  let ctl;
+  if (type === "select") ctl = `<select id="f_${id}" data-f="${id}">${unitOrOpts.map(o=>`<option ${o===String(val)?"selected":""} value="${esc(o)}">${esc(o||"Seleccionar")}</option>`).join("")}</select>`;
+  else if (type === "conn") { const opts = Object.keys(CONN[g("hilos")]||{}); ctl = `<select id="f_${id}" data-f="${id}"><option value="">Seleccionar</option>${opts.map(o=>`<option ${o===val?"selected":""}>${esc(o)}</option>`).join("")}</select>`; }
+  else if (type === "textarea") ctl = `<textarea id="f_${id}" data-f="${id}">${esc(val)}</textarea>`;
+  else ctl = `<input id="f_${id}" data-f="${id}" type="${type==="number"?"text":type}" ${type==="number"?'inputmode="decimal"':""} value="${esc(val)}">`;
+  const unit = type === "number" && unitOrOpts ? `<span class="unit">${esc(unitOrOpts)}</span>` : "";
+  return `<div class="field ${cls||""}"><label for="f_${id}">${esc(label)}</label><div class="inp">${ctl}${unit}</div>${hint?`<span class="hint">${esc(hint)}</span>`:""}</div>`;
+}
+function render(){
+  const st = STEPS[S.step];
+  $("#hdrMotor").textContent = [g("tag"), g("hp") ? g("hp")+" HP" : "", g("hilos") ? g("hilos")+" hilos" : ""].filter(Boolean).join(" · ") || "Prueba de motor";
+  $("#progress").innerHTML = STEPS.map((s,i)=>{ const ss = stepStatus(s); return `<span title="${esc(s.title)}" data-go="${i}" class="${i===S.step?"cur":ss==="fail"?"bad":i<S.step?"done":""}"></span>`; }).join("");
+  $("#stepCount").textContent = `Paso ${S.step+1} de ${STEPS.length} · ${st.phase}`;
+  const checks = stepChecks(st), fields = stepFields(st), evs = stepEvals(st);
+  let h = "";
+  if (S.sample) h += `<div class="banner"><span><b>Datos de ejemplo.</b> Recorre los pasos para ver cómo funciona. Para una prueba real, empieza una nueva.</span><button class="btn" type="button" id="startReal">Nueva prueba</button></div>`;
+  h += `<div class="phase">${esc(st.phase)}</div><h1 class="stitle">${esc(st.title)}</h1>${st.norma?`<div class="norma">${esc(st.norma)}</div>`:""}<p class="intro">${esc(st.intro)}</p>`;
+  if (st.optional) h += `<section class="block"><label class="toggle"><input type="checkbox" id="vibToggle" ${S.vib?"checked":""}> Aplicar módulo de vibración en esta prueba</label><p class="hint">Desactivado, el paso aparece como "no aplicado" en el informe.</p></section>`;
+  const showBody = !st.optional || S.vib;
+  if (showBody && checks.length) h += `<section class="block"><h2>Procedimiento</h2><div class="checks">${checks.map((c,i)=>{ const k = st.id+"_"+i; return `<label class="check"><input type="checkbox" data-c="${k}" ${S.c[k]?"checked":""}><span>${esc(c)}</span></label>`; }).join("")}</div></section>`;
+  if (showBody && fields.length) h += `<section class="block"><h2>Registro</h2><div class="fields">${fields.map(fieldHTML).join("")}</div></section>`;
+  if (evs.length && st.id !== "dictamen") h += `<section class="block"><h2>Evaluación automática</h2><div class="evals" id="evals">${evs.map(evHTML).join("")}</div></section>`;
+  if (st.extra) h += st.extra();
+  h += `<section class="block"><h2>Observaciones${st.photos||true?" y fotos":""}</h2><div class="field wide"><label for="obs_${st.id}" class="hint">Observaciones del paso</label><div class="inp"><textarea id="obs_${st.id}" data-o="${st.id}">${esc(S.obs[st.id]||"")}</textarea></div></div>
+    <div class="photos">${(S.photos[st.id]||[]).map((p,i)=>`<figure><img src="${p}" alt="Foto ${i+1} de ${esc(st.title)}"><button type="button" data-delphoto="${i}">Quitar</button></figure>`).join("")}</div>
+    <label class="btn filebtn" for="ph_${st.id}" style="margin-top:8px">Agregar foto o termograma</label><input type="file" accept="image/*" id="ph_${st.id}" data-ph="${st.id}" multiple hidden></section>`;
+  $("#main").innerHTML = h;
+  $("#prev").disabled = S.step === 0;
+  $("#next").textContent = S.step === STEPS.length-1 ? "Generar PDF" : "Siguiente";
+  renderChips();
+}
+function refreshEvals(){
+  const st = STEPS[S.step]; const el = $("#evals");
+  if (el) el.innerHTML = stepEvals(st).map(evHTML).join("");
+  $("#progress").innerHTML = STEPS.map((s,i)=>{ const ss = stepStatus(s); return `<span title="${esc(s.title)}" data-go="${i}" class="${i===S.step?"cur":ss==="fail"?"bad":i<S.step?"done":""}"></span>`; }).join("");
+}
+
+/* ---------- eventos ---------- */
+document.addEventListener("input", e => {
+  const t = e.target;
+  if (t.dataset.f) { S.v[t.dataset.f] = t.value; save();
+    if (t.dataset.f === "hilos") { S.v.conexion = ""; render(); return; }
+    if (t.dataset.f === "conexion") { render(); return; }
+    refreshEvals(); }
+  else if (t.dataset.o) { S.obs[t.dataset.o] = t.value; save(); }
+});
+document.addEventListener("change", async e => {
+  const t = e.target;
+  if (t.dataset.c) { S.c[t.dataset.c] = t.checked; save(); }
+  else if (t.id === "vibToggle") { S.vib = t.checked; save(); render(); }
+  else if (t.dataset.ph) {
+    const files = [...t.files]; S.photos[t.dataset.ph] = S.photos[t.dataset.ph] || [];
+    for (const f of files) { try { S.photos[t.dataset.ph].push(await shrink(f)); } catch(err){ toast("No se pudo leer la imagen"); } }
+    save(); render();
+  } else if (t.id === "importJson") {
+    const f = t.files[0]; if (!f) return;
+    try { const data = JSON.parse(await f.text()); const items = Array.isArray(data) ? data : [data]; const list = store.get("pm_list") || {};
+      items.forEach(it => { if (it && it.id && it.v) list[it.id] = it; }); store.set("pm_list", list); renderReports(); toast(items.length+" prueba(s) importada(s)"); }
+    catch(err){ toast("El archivo no es un JSON de pruebas válido"); }
+  }
+});
+document.addEventListener("click", e => {
+  const t = e.target.closest("button,[data-go]"); if (!t) return;
+  if (t.dataset.go != null) { S.step = +t.dataset.go; save(); render(); scrollTo(0,0); closeSheets(); }
+  else if (t.dataset.delphoto != null) { S.photos[STEPS[S.step].id].splice(+t.dataset.delphoto,1); save(); render(); }
+  else if (t.dataset.close != null) closeSheets();
+  else if (t.id === "startReal" || t.id === "newTest") { S = blankState(); save(); closeSheets(); render(); scrollTo(0,0); toast("Prueba nueva iniciada"); }
+  else if (t.dataset.open) { const list = store.get("pm_list") || {}; if (list[t.dataset.open]) { S = list[t.dataset.open]; save(); closeSheets(); render(); } }
+  else if (t.dataset.sample != null) { S = sampleState(); save(); closeSheets(); render(); }
+  else if (t.dataset.chip) { $("#aiInput").value = t.dataset.chip; askAI(); }
+});
+$("#prev").onclick = () => { if (S.step > 0) { S.step--; save(); render(); scrollTo(0,0); } };
+$("#next").onclick = () => { if (S.step < STEPS.length-1) { S.step++; save(); render(); scrollTo(0,0); } else makePDF(); };
+$("#pdfBtn").onclick = () => makePDF();
+$("#btnSteps").onclick = () => { $("#stepList").innerHTML = STEPS.map((s,i)=>`<button type="button" data-go="${i}"><span class="n">${String(i+1).padStart(2,"0")}</span><span>${esc(s.title)}<br><span class="hint">${esc(s.phase)}${s.optional&&!S.vib?" · no aplicado":""}</span></span><span class="dot ${stepStatus(s)}"></span></button>`).join(""); $("#sheetSteps").hidden = false; };
+$("#btnReports").onclick = () => { renderReports(); $("#sheetReports").hidden = false; };
+$("#fab").onclick = () => { $("#sheetAI").hidden = false; setTimeout(()=>$("#aiInput").focus(), 50); };
+$("#exportJson").onclick = async () => { const list = store.get("pm_list") || {}; const arr = Object.values(list); if (!S.sample && !list[S.id]) arr.push(S);
+  await saveFile("pruebas-motores-" + new Date().toISOString().slice(0,10) + ".json", new Blob([JSON.stringify(arr, null, 1)], {type:"application/json"})); };
+function closeSheets(){ document.querySelectorAll(".sheet").forEach(s => s.hidden = true); }
+document.querySelectorAll(".sheet").forEach(s => s.addEventListener("click", e => { if (e.target === s) closeSheets(); }));
+function renderReports(){
+  const list = Object.values(store.get("pm_list") || {}).sort((a,b)=>(b.updated||"").localeCompare(a.updated||""));
+  $("#reportList").innerHTML = `<button class="rep" type="button" data-sample><b>Prueba de ejemplo</b><span class="hint">Motor de 25 HP, 12 hilos, datos ficticios</span></button>` +
+    (list.length ? list.map(r => `<button class="rep" type="button" data-open="${esc(r.id)}"><b>${esc(r.v.tag || "Sin TAG")} · ${esc(r.v.cliente || "Sin cliente")}</b><span class="hint">${esc(r.v.fecha||"")} · ${esc(r.v.hp?r.v.hp+" HP":"")} ${esc(r.v.hilos?r.v.hilos+" hilos":"")} · ${esc(r.v.dictamen || "sin dictamen")}</span></button>`).join("") : `<p class="hint">Aún no hay pruebas guardadas en este equipo.</p>`);
+}
+function shrink(file){
+  return new Promise((res, rej) => { const fr = new FileReader(); fr.onerror = rej; fr.onload = () => { const img = new Image(); img.onerror = rej; img.onload = () => {
+    const m = 1000, k = Math.min(1, m / Math.max(img.width, img.height)); const c = document.createElement("canvas"); c.width = Math.round(img.width*k); c.height = Math.round(img.height*k);
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); res(c.toDataURL("image/jpeg", 0.7)); }; img.src = fr.result; }; fr.readAsDataURL(file); });
+}
+
+/* ---------- descargas ---------- */
+let downloadsP = null;
+function getDownloads(){ if (!downloadsP) downloadsP = (window.claude?.use ? window.claude.use("downloads") : Promise.resolve(null)).catch(()=>null); return downloadsP; }
+async function saveFile(name, blob){
+  const d = await getDownloads();
+  if (!d) { // fuera de claude.ai: descarga directa del navegador
+    try { const u = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u), 4000); toast("Archivo listo: " + name); }
+    catch(err){ toast("Las descargas no están disponibles en esta vista"); }
+    return; }
+  try { await d.save({ filename: name, data: blob }); toast("Archivo listo: " + name); }
+  catch(err){ if (err && err.code === "declined") toast("Descarga cancelada"); else toast("No se pudo guardar el archivo"); }
+}
+
+/* ---------- PDF ---------- */
+async function makePDF(){
+  if (!window.jspdf) { toast("No cargó el generador de PDF. Revisa la conexión"); return; }
+  const { jsPDF } = window.jspdf; const doc = new jsPDF({ unit:"mm", format:"letter" });
+  const W = doc.internal.pageSize.getWidth(), M = 14; let y = 16;
+  const steel = [36,56,77], amber = [184,110,0];
+  doc.setFillColor(...steel); doc.rect(0,0,W,24,"F");
+  doc.setTextColor(255); doc.setFont("helvetica","bold"); doc.setFontSize(15); doc.text("ISELEC", M, 11);
+  doc.setFont("helvetica","normal"); doc.setFontSize(10); doc.text("Informe de prueba de motor de inducción", M, 17.5);
+  doc.setFontSize(9); doc.text("Informe " + (S.id||""), W-M, 11, {align:"right"}); doc.text(String(g("fecha")||""), W-M, 17.5, {align:"right"});
+  if (S.sample) { doc.setTextColor(...amber); doc.setFont("helvetica","bold"); doc.text("DATOS DE EJEMPLO", W/2, 11, {align:"center"}); }
+  doc.setTextColor(20); y = 32;
+  const kv = rows => doc.autoTable({ startY:y, body: rows, theme:"grid", margin:{left:M,right:M}, styles:{fontSize:8.5, cellPadding:1.6}, columnStyles:{0:{fontStyle:"bold", cellWidth:46, fillColor:[238,241,244]}} });
+  const h2 = t => { if (y > 250) { doc.addPage(); y = 18; } doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.setTextColor(...steel); doc.text(t, M, y); doc.setTextColor(20); doc.setFont("helvetica","normal"); y += 2; };
+  const after = () => { y = doc.lastAutoTable.finalY + 8; };
+
+  // dictamen
+  const dict = g("dictamen") || suggested() || "Pendiente";
+  const col = /No apto/.test(dict) ? [179,38,30] : /observ/.test(dict) ? [154,100,0] : [31,122,69];
+  doc.setDrawColor(...col); doc.setLineWidth(0.8); doc.rect(M, y, W-2*M, 14);
+  doc.setFont("helvetica","bold"); doc.setFontSize(12); doc.setTextColor(...col); doc.text("Dictamen: " + dict, M+4, y+9);
+  doc.setTextColor(20); y += 22;
+
+  h2("Datos generales"); kv([["Cliente", g("cliente")],["Ubicación", g("sitio")],["TAG", g("tag")],["Orden de trabajo", g("ot")],["Técnico", g("tecnico")],["Supervisor", g("supervisor")],["Condiciones", `T amb ${g("tamb")||"s/d"} °C · HR ${g("hr")||"s/d"} %`]].map(r=>[r[0], r[1]||""])); after();
+  h2("Datos de placa"); kv([["Fabricante / modelo", [g("fab"),g("modelo")].filter(Boolean).join(" ")],["N.º de serie", g("serie")],["Potencia", [g("hp")&&g("hp")+" HP", g("kw")&&g("kw")+" kW"].filter(Boolean).join(" / ")],["Voltaje / corriente", `${g("vplaca")||""} V · ${g("aplaca")||""} A`],["Velocidad / armazón", `${g("rpm")||""} rpm · ${g("frame")||""}`],["FS / clase / diseño", `${g("fs")||""} · ${g("clase")||""} · ${g("diseno")||""}`],["Hilos / conexión", `${g("hilos")} hilos · ${g("conexion")||""} · ${g("vserv")||""} V`]].map(r=>[r[0], r[1]||""])); after();
+
+  // resumen de evaluaciones
+  const ev = allEvals();
+  h2("Resultados y criterios de aceptación");
+  doc.autoTable({ startY:y, head:[["Paso","Prueba","Resultado","Estado","Criterio / nota"]], body: ev.map(e=>[e.step, e.label, e.value, {ok:"Cumple",warn:"Revisar",fail:"No cumple",na:"N/A"}[e.status], e.note||""]),
+    theme:"grid", margin:{left:M,right:M}, styles:{fontSize:7.6, cellPadding:1.4, valign:"top"}, headStyles:{fillColor:steel},
+    columnStyles:{0:{cellWidth:26},1:{cellWidth:34},2:{cellWidth:28},3:{cellWidth:16, fontStyle:"bold"}},
+    didParseCell: d => { if (d.section==="body" && d.column.index===3) { const v = d.cell.raw; d.cell.styles.textColor = v==="Cumple"?[31,122,69]:v==="Revisar"?[154,100,0]:v==="No cumple"?[179,38,30]:[90,104,118]; } } });
+  after();
+
+  // detalle por paso
+  for (const st of STEPS) {
+    if (st.id === "general" || st.id === "placa") continue;
+    const fields = stepFields(st).filter(f => S.v[f[0]] !== undefined && S.v[f[0]] !== "");
+    const checks = stepChecks(st); const done = checks.filter((c,i)=>S.c[st.id+"_"+i]).length;
+    const obs = S.obs[st.id]; const ph = S.photos[st.id] || [];
+    if (st.optional && !S.vib) { h2(st.title); kv([["Estado","No aplicado en esta prueba"]]); after(); continue; }
+    if (!fields.length && !checks.length && !obs && !ph.length && st.id!=="dictamen") continue;
+    h2(st.title + (st.norma ? "  ·  " + st.norma : ""));
+    const rows = fields.filter(f=>!["dictamen","recom","proxima"].includes(f[0])).map(f => [f[1] + (f[2]==="number"&&f[3]?" ("+f[3]+")":""), String(S.v[f[0]])]);
+    if (checks.length) rows.push(["Procedimiento", `${done} de ${checks.length} puntos verificados`]);
+    const pend = checks.filter((c,i)=>!S.c[st.id+"_"+i]); if (pend.length && pend.length < checks.length) rows.push(["Puntos no marcados", pend.join("; ")]);
+    if (obs) rows.push(["Observaciones", obs]);
+    if (rows.length) { kv(rows); after(); }
+    if (ph.length) {
+      let x = M; const sz = 58;
+      if (y + sz > 265) { doc.addPage(); y = 18; }
+      for (const p of ph) { if (x + sz > W - M) { x = M; y += sz + 4; if (y + sz > 265) { doc.addPage(); y = 18; } }
+        try { const pr = doc.getImageProperties(p); const k = Math.min(sz/pr.width, sz/pr.height); doc.addImage(p, "JPEG", x, y, pr.width*k, pr.height*k); } catch(e){}
+        x += sz + 4; }
+      y += sz + 8;
+    }
+  }
+  h2("Dictamen y recomendaciones");
+  kv([["Dictamen", g("dictamen") || "No definido (sugerido: " + (suggested()||"s/d") + ")"],["Recomendaciones", g("recom") || ""],["Próxima prueba", g("proxima") || ""]]); after();
+  if (y > 240) { doc.addPage(); y = 30; }
+  y += 14; doc.setDrawColor(120); doc.setLineWidth(0.3);
+  doc.line(M, y, M+70, y); doc.line(W-M-70, y, W-M, y); doc.setFontSize(8.5);
+  doc.text("Técnico: " + (g("tecnico")||""), M, y+5); doc.text("Revisó: " + (g("supervisor")||""), W-M-70, y+5);
+  const n = doc.getNumberOfPages();
+  for (let i=1;i<=n;i++){ doc.setPage(i); doc.setFontSize(7.5); doc.setTextColor(110); doc.text(`Normas de referencia: NFPA 70E, IEEE 43-2013, NEMA MG-1, NETA MTS-2023, ISO 20816-3 · Página ${i} de ${n}`, W/2, 272, {align:"center"}); }
+  const name = `Informe-${(g("tag")||"motor").replace(/[^\w-]+/g,"_")}-${g("fecha")||""}.pdf`;
+  await saveFile(name, doc.output("blob"));
+}
+
+/* ---------- asistente IA ---------- */
+let samplerP = null, chat = [], aiBusy = false;
+function getSampler(){ if (!samplerP) samplerP = (window.claude?.use ? window.claude.use("sample") : Promise.resolve(null)).catch(()=>null); return samplerP; }
+function renderChips(){
+  const st = STEPS[S.step];
+  const base = { termo:["¿Qué emisividad uso en carcasa pintada?","¿Cómo interpreto un ΔT de 8 °C en una fase?"], vibracion:["¿Qué equipo de vibración me conviene comprar?","¿Qué indica vibración alta en axial?"],
+    resistencia:["¿Cómo corrijo la resistencia a 25 °C?","El desbalance da 6 %, ¿qué reviso?"], aislamiento:["¿Por qué 500 V y no 1000 V?","IR bajo con humedad alta, ¿qué hago?"],
+    pi:["PI de 1.3 con IR alto, ¿qué significa?"], placa:["¿Cómo identifico un motor de 12 hilos sin placa?"], loto:["¿Qué pasos exige NFPA 70E para verificar ausencia de tensión?"], arranque:["Desbalance de voltaje 2 %, ¿cuánto reduzco la potencia?"] };
+  const list = base[st.id] || ["Revisa los datos que llevo y dime si algo no cuadra"];
+  $("#aiChips").innerHTML = list.map(q=>`<button type="button" class="chip" data-chip="${esc(q)}">${esc(q)}</button>`).join("");
+}
+function context(){
+  const st = STEPS[S.step];
+  return `Eres el asistente técnico de ISELEC (Panamá) para técnicos que prueban motores de inducción trifásicos multiconexión (6 y 12 hilos), menores de 600 V.
+Equipos disponibles: cámara termográfica, Fluke 1587 FC (aislamiento 50-1000 V, PI/DAR, resistencia con resolución 0.1 Ω, voltaje), termómetro infrarrojo. Aún no hay medidor de vibración.
+Normas de referencia: NFPA 70E-2024, IEEE 43-2013, NEMA MG-1, NETA MTS-2023, ISO 20816-3 / 10816-1, EASA AR100.
+Reglas: responde en español, breve y práctico, registro técnico. Cita la norma y la cláusula cuando la sepas; si no estás seguro de un valor, dilo. La seguridad va primero: nunca sugieras trabajar energizado sin justificación y EPP. No uses markdown con negritas ni emojis.
+Paso actual: ${st.title} (${st.phase}).
+Datos registrados (JSON): ${JSON.stringify({ valores:S.v, vibracion_aplicada:S.vib, evaluaciones: allEvals().map(e=>({paso:e.step, prueba:e.label, resultado:e.value, estado:e.status})) })}`;
+}
+function addMsg(role, text){ const d = document.createElement("div"); d.className = "msg " + role; d.textContent = text; $("#chat").appendChild(d); $("#chat").scrollTop = 1e9; return d; }
+async function askAI(){
+  const q = $("#aiInput").value.trim(); if (!q || aiBusy) return;
+  $("#aiInput").value = ""; addMsg("user", q);
+  const sampler = await getSampler();
+  if (!sampler) { addMsg("ai", "El asistente no está disponible en esta vista. En la versión alojada se conecta a la API de Claude desde el servidor de ISELEC."); return; }
+  aiBusy = true; $("#aiSend").disabled = true;
+  const out = addMsg("ai", "Pensando…");
+  const msgs = [...chat, { role:"user", content: q }];
+  const input = msgs.map((m,i)=> i===0 ? { role:"user", content: context() + "\n\nConsulta del técnico: " + m.content } : m);
+  try {
+    const r = await sampler(input, { cache:false, onText: ({text}) => { out.textContent = text; $("#chat").scrollTop = 1e9; } });
+    out.textContent = r.text + (r.truncated ? "\n\n(Respuesta cortada por longitud)" : "");
+    chat.push({ role:"user", content:q }, { role:"assistant", content:r.text });
+    if (chat.length > 12) chat = chat.slice(-12);
+  } catch(err) {
+    out.textContent = err && err.code === "not_granted" ? "No se dio permiso al asistente en esta página." : err && err.code === "rate_limited" ? "Demasiadas consultas seguidas. Espera un momento." : "No se pudo obtener respuesta. Intenta de nuevo.";
+  } finally { aiBusy = false; $("#aiSend").disabled = false; }
+}
+$("#aiForm").addEventListener("submit", e => { e.preventDefault(); askAI(); });
+$("#aiInput").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); askAI(); } });
+
+render();
+</script>
+
+</body>
+</html>

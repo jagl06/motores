@@ -14,3 +14,6 @@ desktop.ini
 .vscode/
 .idea/
 node_modules/
+
+# Prompt de arranque del proyecto (documento de trabajo)
+prompt-claude-code.md
