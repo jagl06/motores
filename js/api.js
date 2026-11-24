@@ -51,6 +51,8 @@ export async function pedir(metodo, ruta, cuerpo, opciones = {}) {
 export const subirArchivo = (ruta, blob, tipo) => pedir("POST", ruta, undefined, { binario: blob, tipo });
 export const bajarArchivo = ruta => pedir("GET", ruta, undefined, { blob: true });
 
+export const olvidarSesion = () => guardarSesion(null);
+
 export async function login(usuario, clave) {
   const d = await pedir("POST", "/auth/login", { usuario, clave });
   guardarSesion({ token: d.token, vence_en: d.vence_en, usuario: d.usuario });

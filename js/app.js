@@ -7,8 +7,9 @@ import { generarPDF } from "./pdf.js";
 import { sesion, login, logout, cambiarClave, ApiError } from "./api.js";
 import * as sync from "./sync.js";
 import { cargarHistorial, historialHTML } from "./historial.js";
+import * as asistente from "./asistente.js";
 
-export const VERSION = "1.3.0-etapa5";
+export const VERSION = "1.4.0-etapa4";
 
 /* ---------- utilidades ---------- */
 const $ = s => document.querySelector(s);
@@ -87,6 +88,7 @@ async function abrir(estado) {
   }
   setSaveState(textoEstado());
   closeSheets(); render(); scrollTo(0, 0);
+  reiniciarChat();
   bajarFotosFaltantes();
 }
 // Fotos que la prueba referencia y no están en este celular (prueba traída del servidor): se bajan y se guardan aquí
@@ -273,6 +275,7 @@ document.addEventListener("click", async e => {
   else if (t.id === "reabrir") { S.estado = "borrador"; delete S.cerrada; db.delPdf(S.uuid).catch(() => {}); save(); render(); toast("Prueba reabierta"); }
   else if (t.id === "aprobar" || t.id === "devolver") await revisar(t.id);
   else if (t.id === "verHistorial") await verHistorial();
+  else if (t.dataset.chip) { $("#aiInput").value = t.dataset.chip; await preguntarAI(); }
   else if (t.id === "usarLocal") { S.rev = S.conflicto.rev; delete S.conflicto; save(true); render(); sync.programar(300); toast("Se conserva la versión de este celular"); }
   else if (t.id === "usarServidor") await usarServidor();
   else if (t.id === "btnSync") await sincronizarAhora();
@@ -292,7 +295,7 @@ $("#btnSteps").onclick = () => {
   $("#sheetSteps").hidden = false;
 };
 $("#btnReports").onclick = async () => { await renderReports(); $("#sheetReports").hidden = false; };
-$("#fab").onclick = () => { $("#sheetAI").hidden = false; };
+$("#fab").onclick = () => abrirAsistente();
 $("#exportJson").onclick = () => exportar();
 function closeSheets() { document.querySelectorAll(".sheet").forEach(s => s.hidden = true); }
 document.querySelectorAll(".sheet").forEach(s => s.addEventListener("click", e => { if (e.target === s) closeSheets(); }));
@@ -409,6 +412,59 @@ async function revisar(accion) {
     toast(accion === "aprobar" ? (r.sellado === false ? "Prueba aprobada. El sello se agregará al generar el informe" : "Prueba aprobada e informe sellado") : "Prueba devuelta al técnico");
   } catch (e) { toast(errorTxt(e)); }
 }
+
+/* ---------- asistente técnico ---------- */
+let chat = [], aiBusy = false;
+function reiniciarChat() {
+  chat = [];
+  document.querySelectorAll("#chat .msg:not(:first-child)").forEach(m => m.remove());
+}
+function addMsg(clase, texto) {
+  const d = document.createElement("div"); d.className = "msg " + clase; d.textContent = texto;
+  $("#chat").appendChild(d); $("#chat").scrollTop = 1e9; return d;
+}
+function renderChips() {
+  $("#aiChips").innerHTML = chat.length ? "" : asistente.sugerencias(STEPS[S.step].id).map(q => `<button type="button" class="chip" data-chip="${esc(q)}">${esc(q)}</button>`).join("");
+}
+async function abrirAsistente() {
+  $("#sheetAI").hidden = false; renderChips();
+  const est = $("#aiEstado"), listo = !!sesion() && navigator.onLine !== false;
+  $("#aiSend").disabled = !listo || aiBusy; $("#aiInput").disabled = !listo;
+  est.textContent = !sesion() ? "Inicia sesión en Pruebas para usar el asistente." : navigator.onLine === false ? "El asistente necesita conexión." : "";
+  if (!listo) return;
+  try {
+    const u = await asistente.usoDeHoy();
+    if (!u.disponible) { est.textContent = "El asistente aún no está habilitado en el servidor."; $("#aiSend").disabled = true; $("#aiInput").disabled = true; }
+    else est.textContent = `Te quedan ${u.restantes} de ${u.limite} consultas hoy.`;
+  } catch (e) { /* se sabrá al enviar */ }
+  if (!$("#aiInput").disabled && matchMedia("(pointer: fine)").matches) $("#aiInput").focus(); // en el celular no se abre el teclado solo
+}
+async function preguntarAI() {
+  const q = $("#aiInput").value.trim(); if (!q || aiBusy) return;
+  if (!sesion()) { $("#aiEstado").textContent = "Inicia sesión en Pruebas para usar el asistente."; return; }
+  const prueba = S;
+  $("#aiInput").value = ""; $("#aiChips").innerHTML = ""; addMsg("user", q);
+  aiBusy = true; $("#aiSend").disabled = true;
+  const out = addMsg("ai", "Pensando…");
+  try {
+    const r = await asistente.preguntar([...chat, { role: "user", content: q }], asistente.contexto(prueba), parcial => { out.textContent = parcial; $("#chat").scrollTop = 1e9; });
+    if (r.rechazo || !r.texto) { out.textContent = "El asistente no pudo responder esa consulta. Intenta formularla de otra manera."; }
+    else {
+      out.textContent = r.texto + (r.corte ? "\n\n(Respuesta cortada por longitud. Pide que continúe o haz una consulta más puntual.)" : "");
+      if (S === prueba) { chat.push({ role: "user", content: q }, { role: "assistant", content: r.texto }); if (chat.length > 12) chat = chat.slice(-12); }
+    }
+    if (typeof r.restantes === "number") $("#aiEstado").textContent = `Te quedan ${r.restantes} consultas hoy.`;
+  } catch (e) {
+    const parcial = e instanceof ApiError && e.parcial ? e.parcial + "\n\n" : "";
+    const msg = !(e instanceof ApiError) ? "No se pudo obtener respuesta. Intenta de nuevo."
+      : e.estado === 0 ? "Sin conexión con el servidor. Intenta cuando tengas señal."
+      : e.estado === 401 ? "La sesión venció. Inicia sesión de nuevo en Pruebas." : e.message;
+    if (parcial) { out.textContent = parcial.trim(); addMsg("aviso", msg); } else { out.remove(); addMsg("aviso", msg); }
+    if (e instanceof ApiError && typeof e.datos.restantes === "number") $("#aiEstado").textContent = `Te quedan ${e.datos.restantes} consultas hoy.`;
+  } finally { aiBusy = false; $("#aiSend").disabled = !sesion(); $("#chat").scrollTop = 1e9; }
+}
+$("#aiForm").addEventListener("submit", e => { e.preventDefault(); preguntarAI(); });
+$("#aiInput").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && matchMedia("(pointer: fine)").matches) { e.preventDefault(); preguntarAI(); } });
 
 /* ---------- historial del motor ---------- */
 async function verHistorial() {

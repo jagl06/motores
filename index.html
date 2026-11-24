@@ -75,8 +75,14 @@
 <div class="sheet" id="sheetAI" hidden><div class="card">
   <header><h3>Asistente técnico</h3><button class="btn" data-close type="button">Cerrar</button></header>
   <div class="body" id="chat">
-    <div class="msg ai">El asistente se conecta al servidor de ISELEC y todavía no está habilitado en esta versión. El protocolo, los criterios y el informe PDF funcionan completos sin él.</div>
+    <div class="msg ai">Consulta lo que necesites durante la prueba. Veo los datos que llevas registrados y el paso en que estás. Mis respuestas son una ayuda: verifica contra la norma y la placa, y el dictamen lo decides tú.</div>
+    <div class="chips" id="aiChips"></div>
   </div>
+  <p class="hint ai-estado" id="aiEstado"></p>
+  <form class="composer" id="aiForm">
+    <textarea id="aiInput" placeholder="Escribe tu consulta" maxlength="4000" aria-label="Consulta para el asistente"></textarea>
+    <button class="btn primary" type="submit" id="aiSend">Enviar</button>
+  </form>
 </div></div>
 
 <div class="toast" id="toast" role="status" hidden></div>

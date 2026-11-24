@@ -110,6 +110,9 @@ nav.bottom .grow{flex:1}
 .msg.ai{align-self:flex-start;background:var(--bg);border:1px solid var(--line)}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:20px;min-height:40px;padding:8px 12px;font-size:13px;cursor:pointer;text-align:left}
+.ai-estado{margin:0;padding:4px max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px))}
+.ai-estado:empty{display:none}
+.msg.aviso{align-self:stretch;max-width:none;background:var(--warn-bg);color:var(--warn);font-size:13px}
 .composer{display:flex;gap:8px;padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));border-top:1px solid var(--line)}
 .composer textarea{flex:1;min-width:0;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:16px var(--f-body);padding:10px;resize:none;height:48px}
 .steplist{display:flex;flex-direction:column;gap:4px}
