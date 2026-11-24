@@ -30,7 +30,7 @@ Todo lo que no es `public/` queda fuera del alcance del servidor web. La API key
    *Document Root* en `repositories/motores/api/public` (o `motores-api/public` si fue por SFTP).
    Bluehost crea el registro DNS. Verificar que AutoSSL emitió el certificado (*SSL/TLS Status*).
 4. **Versión de PHP.** cPanel → *MultiPHP Manager*: PHP 8.1 o superior para el subdominio.
-   Extensiones necesarias: `pdo_mysql`, `mbstring`, `json`, `fileinfo`, `iconv` (vienen activas por defecto).
+   Extensiones necesarias: `pdo_mysql`, `mbstring`, `json`, `fileinfo`, `iconv`, `curl` (vienen activas por defecto).
 5. **Configuración.** En el *File Manager*, dentro de `api/`: copiar `config.example.php` como
    `config.php`, poner el DSN, usuario y clave de la base, y permisos `600`.
 6. **Tablas.** Con terminal (cPanel → *Terminal*, o SSH):
@@ -56,6 +56,35 @@ Todo lo que no es `public/` queda fuera del alcance del servidor web. La API key
    ```
    15 3 * * * /usr/local/bin/php /home/CUENTA/repositories/motores/api/cron/limpieza.php >/dev/null 2>&1
    ```
+
+## Asistente de IA
+
+El asistente queda apagado hasta que `config.php` tenga la API key de Anthropic. Para encenderlo:
+
+1. Crear una API key en la consola de Anthropic (https://platform.claude.com), en una cuenta de la
+   empresa con un límite de gasto mensual configurado.
+2. En el *File Manager*, editar `api/config.php` y, dentro del bloque `'anthropic'`, pegar la key en
+   `'api_key' => '...'`. Si `config.php` es anterior a esta versión y su bloque `'anthropic'` no trae
+   `'equipos'`, `'esfuerzo'` ni `'respaldo'`, no hace falta agregarlos: tienen valores por defecto
+   (los de `config.example.php`). Para nombrar los instrumentos reales de ISELEC, agregar la línea
+   `'equipos' => '...'` con el texto que se quiera.
+3. Aplicar la migración 003 (`php ~/repositories/motores/api/bin/migrar.php`).
+4. En la app, abrir **Asistente**: debe decir "Te quedan 40 de 40 consultas hoy".
+
+La key nunca sale del servidor: no está en el repositorio, ni en la app, ni en las respuestas de la API.
+
+Control de costo:
+
+- `'consultas_dia'` limita las consultas por usuario y por día (día de Panamá).
+- `php ~/repositories/motores/api/bin/uso-asistente.php [AAAA-MM]` muestra consultas y tokens por
+  usuario en el mes, con el costo aproximado.
+- Cada consulta envía las instrucciones, los datos de la prueba y hasta 12 mensajes de la conversación,
+  y pide como máximo `'max_tokens'` de respuesta.
+
+Si las respuestas llegan de golpe en vez de aparecer poco a poco, el hosting está reteniendo la salida:
+la app funciona igual, solo que sin el efecto de escritura. Si el asistente responde "No se pudo obtener
+respuesta", el motivo exacto queda en el registro de errores de PHP (cPanel → *Errors*), con el prefijo
+`[motores-api] asistente`.
 
 ## Comprobación
 
@@ -100,9 +129,14 @@ php bin/migrar.php
 php bin/usuario.php crear tecnico1 "Técnico Uno" tecnico      > claves.txt
 php bin/usuario.php crear tecnico2 "Técnico Dos" tecnico      >> claves.txt
 php bin/usuario.php crear supervisor1 "Supervisora Uno" supervisor >> claves.txt
+node ../tools/anthropic-simulado.js &                            # imita la API de Anthropic en el puerto 8126
 php -S 127.0.0.1:8125 -t public public/index.php
-node ../tools/probar-api.js http://127.0.0.1:8125 claves.txt     # 104 comprobaciones
+node ../tools/probar-api.js http://127.0.0.1:8125 claves.txt     # 138 comprobaciones
 ```
+
+Para probar el asistente sin una key real, el `config.php` local apunta al servidor simulado:
+`'anthropic' => ['api_key' => 'clave-de-prueba', 'url' => 'http://127.0.0.1:8126/v1/messages']`.
+Con `'api_key'` vacía, `probar-api.js` omite las comprobaciones del asistente y lo avisa.
 
 `probar-api.js` crea y cierra pruebas y bloquea un usuario ficticio: es solo para desarrollo y se
 niega a correr contra `iselec.com.pa`. Para usar la app local contra esa API, en la consola del
@@ -126,6 +160,9 @@ navegador: `localStorage.pm_api = "http://localhost:8125"`.
 | GET | `/pruebas/{uuid}/pdf` | descarga el informe (el sellado si la prueba está aprobada) |
 | POST | `/pruebas/{uuid}/aprobar` | supervisor o administrador; exige prueba cerrada con su PDF y sus fotos |
 | POST | `/pruebas/{uuid}/devolver` | supervisor o administrador; `{motivo}`; la prueba vuelve a borrador |
+| GET | `/motores/{serie_o_tag}/historial` | IR a 40 °C, PI, DAR y resistencia de cada prueba del motor (también `/motores/historial?q=&cliente=`) |
+| POST | `/asistente` | `{mensajes, contexto, stream}`; proxy a Claude con límite diario por usuario |
+| GET | `/asistente/uso` | consultas de hoy, límite y si el asistente está configurado |
 
 La app envía fotos e informes con `Content-Type: application/octet-stream`: el ModSecurity de Bluehost
 responde 406 a un POST con `Content-Type: application/pdf` antes de que llegue a PHP. La API no usa esa
