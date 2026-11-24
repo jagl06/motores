@@ -4,8 +4,10 @@ import { STEPS, stepEvals, stepStatus, stepChecks, stepFields, allEvals, suggest
 import * as db from "./db.js";
 import { comprimir, aDataURL, deDataURL } from "./fotos.js";
 import { generarPDF } from "./pdf.js";
+import { sesion, login, logout, cambiarClave, ApiError } from "./api.js";
+import * as sync from "./sync.js";
 
-export const VERSION = "1.0.3-etapa1";
+export const VERSION = "1.1.0-etapa2";
 
 /* ---------- utilidades ---------- */
 const $ = s => document.querySelector(s);
@@ -23,8 +25,16 @@ function hoy() { const d = new Date(); return `${d.getFullYear()}-${String(d.get
 
 function blankState() {
   return { uuid: db.uuid(), created: new Date().toISOString(), step: 0, vib: false, estado: "borrador", rev: 0,
-    v: { fecha: hoy(), hilos: "12", clase: "F", vprueba: "500", base: "Rígida" },
+    v: { fecha: hoy(), hilos: "12", clase: "F", vprueba: "500", base: "Rígida", ...(sesion() ? { tecnico: sesion().usuario.nombre } : {}) },
     c: {}, obs: {}, photos: {} };
+}
+// Cerrada, aprobada o de otro técnico: se puede ver y sacar el PDF, pero no editar
+const soloLectura = () => !S.sample && (S.estado !== "borrador" || !!S.ajena);
+function textoEstado() {
+  if (S.sample) return "Ejemplo, no se guarda";
+  if (S.conflicto) return "Conflicto con el servidor";
+  if (!sesion()) return "Guardado en este equipo";
+  return S.dirty ? "Guardado · por subir" : "Sincronizada";
 }
 function sampleState() {
   const s = blankState();
@@ -42,19 +52,20 @@ const g = id => S.v[id];
 /* ---------- guardado ---------- */
 let saveT = null, savePend = null;
 function setSaveState(t) { $("#saveState").textContent = t; }
-function save() {
-  S.updated = new Date().toISOString();
-  if (S.sample) { setSaveState("Ejemplo, no se guarda"); return; }
-  S.dirty = true; // pendiente de sincronizar (etapa 2)
+function save(forzar = false) {
+  if (S.sample) { S.updated = new Date().toISOString(); setSaveState("Ejemplo, no se guarda"); return; }
+  // En solo lectura (p. ej. al cambiar de paso en una prueba cerrada) se guarda la posición, pero no cuenta como cambio
+  if (forzar || !soloLectura()) { S.updated = new Date().toISOString(); S.dirty = true; }
   setSaveState("Guardando…");
   clearTimeout(saveT); saveT = setTimeout(flush, 250);
+  if (sesion()) sync.programar();
 }
 function flush() {
   clearTimeout(saveT); saveT = null;
   if (!S || S.sample) return Promise.resolve();
   const copia = JSON.parse(JSON.stringify(S));
   savePend = db.putPrueba(copia)
-    .then(() => setSaveState("Guardado en este equipo"))
+    .then(() => setSaveState(textoEstado()))
     .catch(() => { setSaveState("No se pudo guardar"); toast("No se pudo guardar en este equipo. Exporta un respaldo"); });
   return savePend;
 }
@@ -69,13 +80,32 @@ async function abrir(estado) {
   if (!S.sample) {
     try { for (const f of await db.fotosDePrueba(S.uuid)) blobs.set(f.uuid, f.blob); } catch (e) { /* sin fotos */ }
     db.setMeta("actual", S.uuid).catch(() => {});
-    setSaveState("Guardado en este equipo");
   } else {
     db.setMeta("actual", "").catch(() => {});
-    setSaveState("Ejemplo, no se guarda");
   }
+  setSaveState(textoEstado());
   closeSheets(); render(); scrollTo(0, 0);
 }
+// Aplica a una prueba lo que devolvió el servidor (revisión, estado, conflicto) sin marcarla como modificada.
+// `marca` es el `updated` con que se subió: si no cambió desde entonces, ya no está pendiente.
+async function parchar(uuid, cambios, marca) {
+  const aplicar = p => {
+    Object.assign(p, cambios);
+    if (cambios.errorSync === null) delete p.errorSync;
+    if (marca !== undefined && p.updated === marca) p.dirty = false;
+  };
+  if (S && !S.sample && S.uuid === uuid) {
+    const antes = [S.estado, S.estadoServidor, !!S.conflicto, S.errorSync || ""].join("|");
+    aplicar(S);
+    await db.putPrueba(JSON.parse(JSON.stringify(S))).catch(() => {});
+    setSaveState(textoEstado());
+    if ([S.estado, S.estadoServidor, !!S.conflicto, S.errorSync || ""].join("|") !== antes) render(); // solo si cambia lo que se ve: no interrumpe al que escribe
+  } else {
+    const p = await db.getPrueba(uuid); if (!p) return;
+    aplicar(p); await db.putPrueba(p);
+  }
+}
+
 function fotoURL(id) {
   if (!urls.has(id) && blobs.has(id)) urls.set(id, URL.createObjectURL(blobs.get(id)));
   return urls.get(id) || "";
@@ -125,6 +155,13 @@ function render() {
   const checks = stepChecks(st, S), fields = stepFields(st, S), evs = stepEvals(st, S);
   let h = "";
   if (S.sample) h += `<div class="banner"><span><b>Datos de ejemplo.</b> Recorre los pasos para ver cómo funciona. Para una prueba real, empieza una nueva.</span><button class="btn" type="button" id="startReal">Nueva prueba</button></div>`;
+  if (S.conflicto) h += `<div class="banner fail"><span><b>Esta prueba cambió en el servidor desde otro equipo.</b> Elige cuál versión conservar; la otra se descarta.</span>
+    <div class="btnrow"><button class="btn" type="button" id="usarLocal">Conservar la de este celular</button><button class="btn" type="button" id="usarServidor">Usar la del servidor</button></div></div>`;
+  else if (S.ajena) h += `<div class="banner"><span><b>Prueba de ${esc(S.tecnicoNombre || "otro técnico")}.</b> Solo lectura.</span></div>`;
+  else if (S.estado === "aprobada") h += `<div class="banner ok"><span><b>Prueba aprobada.</b> Solo lectura.</span></div>`;
+  else if (S.estado === "cerrada") h += `<div class="banner"><span><b>Prueba cerrada.</b> Solo lectura${S.estadoServidor === "cerrada" ? "; pendiente de revisión del supervisor." : sesion() ? "; se subirá al servidor al haber conexión." : "; inicia sesión para subirla al servidor."}</span>
+    ${S.estadoServidor === "cerrada" ? "" : `<button class="btn" type="button" id="reabrir">Reabrir</button>`}</div>`;
+  if (S.errorSync && !S.conflicto) h += `<div class="banner fail"><span><b>No se pudo subir:</b> ${esc(S.errorSync)}</span></div>`;
   h += `<div class="phase">${esc(st.phase)}</div><h1 class="stitle">${esc(st.title)}</h1>${st.norma ? `<div class="norma">${esc(st.norma)}</div>` : ""}<p class="intro">${esc(st.intro)}</p>`;
   if (st.optional) h += `<section class="block"><label class="toggle"><input type="checkbox" id="vibToggle" ${S.vib ? "checked" : ""}> Aplicar módulo de vibración en esta prueba</label><p class="hint">Desactivado, el paso aparece como "no aplicado" en el informe.</p></section>`;
   const showBody = !st.optional || S.vib;
@@ -136,7 +173,14 @@ function render() {
   h += `<section class="block"><h2>Observaciones y fotos</h2><div class="field wide"><label for="obs_${st.id}" class="hint">Observaciones del paso</label><div class="inp"><textarea id="obs_${st.id}" data-o="${st.id}">${esc(S.obs[st.id] || "")}</textarea></div></div>
     <div class="photos">${(S.photos[st.id] || []).map((id, i) => `<figure><img src="${fotoURL(id)}" alt="Foto ${i + 1} de ${esc(st.title)}"><button type="button" data-delphoto="${i}">Quitar</button></figure>`).join("")}</div>
     <label class="btn filebtn" for="ph_${st.id}" style="margin-top:8px">Agregar foto o termograma</label><input type="file" accept="image/*" id="ph_${st.id}" data-ph="${st.id}" multiple hidden></section>`;
+  if (st.id === "dictamen" && !S.sample && !soloLectura()) h += `<section class="block"><h2>Cerrar la prueba</h2>
+    <p class="hint">Al cerrarla queda en solo lectura y pasa a revisión del supervisor. Antes de cerrar, elige el dictamen.</p>
+    <button class="btn primary" type="button" id="cerrarPrueba">Cerrar prueba</button></section>`;
   $("#main").innerHTML = h;
+  if (soloLectura()) {
+    $("#main").querySelectorAll("input, select, textarea").forEach(el => { el.disabled = true; });
+    $("#main").querySelectorAll(".filebtn, [data-delphoto]").forEach(el => { el.hidden = true; });
+  }
   $("#prev").disabled = S.step === 0;
   $("#next").textContent = S.step === STEPS.length - 1 ? "Generar PDF" : "Siguiente";
   $("#pdfBtn").hidden = S.step === STEPS.length - 1; // en el último paso "Generar PDF" ya está en el botón principal
@@ -151,6 +195,7 @@ function go(i) { S.step = Math.max(0, Math.min(STEPS.length - 1, i)); save(); re
 /* ---------- eventos ---------- */
 document.addEventListener("input", e => {
   const t = e.target;
+  if (soloLectura()) return;
   if (t.dataset.f) {
     S.v[t.dataset.f] = t.value; save();
     if (t.dataset.f === "hilos") { S.v.conexion = ""; render(); return; }
@@ -160,15 +205,24 @@ document.addEventListener("input", e => {
 });
 document.addEventListener("change", async e => {
   const t = e.target;
+  if (t.id === "importJson") { await importar(t.files[0]); t.value = ""; return; }
+  if (soloLectura()) return;
   if (t.dataset.c) { S.c[t.dataset.c] = t.checked; save(); }
   else if (t.id === "vibToggle") { S.vib = t.checked; save(); render(); }
   else if (t.dataset.ph) await agregarFotos(t.dataset.ph, [...t.files]);
-  else if (t.id === "importJson") { await importar(t.files[0]); t.value = ""; }
 });
 document.addEventListener("click", async e => {
   const t = e.target.closest("button,[data-go]"); if (!t) return;
   if (t.dataset.go != null) go(+t.dataset.go);
-  else if (t.dataset.delphoto != null) quitarFoto(STEPS[S.step].id, +t.dataset.delphoto);
+  else if (t.dataset.delphoto != null) { if (!soloLectura()) quitarFoto(STEPS[S.step].id, +t.dataset.delphoto); }
+  else if (t.id === "cerrarPrueba") cerrarPrueba();
+  else if (t.id === "reabrir") { S.estado = "borrador"; delete S.cerrada; save(); render(); toast("Prueba reabierta"); }
+  else if (t.id === "usarLocal") { S.rev = S.conflicto.rev; delete S.conflicto; save(true); render(); sync.programar(300); toast("Se conserva la versión de este celular"); }
+  else if (t.id === "usarServidor") await usarServidor();
+  else if (t.id === "btnSync") await sincronizarAhora();
+  else if (t.id === "btnLogout") { await logout(); toast("Sesión cerrada. Las pruebas siguen en este celular"); }
+  else if (t.id === "btnClave") { $("#claveForm").hidden = !$("#claveForm").hidden; }
+  else if (t.dataset.traer) await traerDelServidor(t.dataset.traer);
   else if (t.dataset.close != null) closeSheets();
   else if (t.id === "startReal" || t.id === "newTest") { const n = blankState(); await db.putPrueba(JSON.parse(JSON.stringify(n))).catch(() => {}); await abrir(n); toast("Prueba nueva iniciada"); }
   else if (t.dataset.open) { const p = await db.getPrueba(t.dataset.open).catch(() => null); if (p) await abrir(p); else toast("No se pudo abrir la prueba"); }
@@ -192,9 +246,87 @@ async function renderReports() {
   if (saveT) await flush();
   let list = [];
   try { list = (await db.listPruebas()).sort((a, b) => (b.updated || b.created || "").localeCompare(a.updated || a.created || "")); } catch (e) { /* sin base local */ }
+  const marca = r => r.conflicto ? "conflicto" : r.ajena ? "de " + (r.tecnicoNombre || "otro técnico") : !sesion() ? "" : r.dirty ? "por subir" : r.sincronizada ? "sincronizada" : "";
   $("#reportList").innerHTML = `<button class="rep" type="button" data-sample><b>Prueba de ejemplo</b><span class="hint">Motor de 25 HP, 12 hilos, datos ficticios</span></button>` +
-    (list.length ? list.map(r => `<button class="rep" type="button" data-open="${esc(r.uuid)}"><b>${esc(r.v.tag || "Sin TAG")} · ${esc(r.v.cliente || "Sin cliente")}</b><span class="hint">${esc(r.v.fecha || "")} · ${esc(r.v.hp ? r.v.hp + " HP" : "")} ${esc(r.v.hilos ? r.v.hilos + " hilos" : "")} · ${esc(r.v.dictamen || "sin dictamen")}${!S.sample && r.uuid === S.uuid ? " · abierta" : ""}</span></button>`).join("") : `<p class="hint">Aún no hay pruebas guardadas en este equipo.</p>`);
+    (list.length ? list.map(r => `<button class="rep" type="button" data-open="${esc(r.uuid)}"><b>${esc(r.v.tag || "Sin TAG")} · ${esc(r.v.cliente || "Sin cliente")}</b><span class="hint">${esc([r.v.fecha, r.v.hp ? r.v.hp + " HP" : "", r.v.hilos ? r.v.hilos + " hilos" : "", r.v.dictamen || "sin dictamen", r.estado && r.estado !== "borrador" ? r.estado : "", marca(r), !S.sample && r.uuid === S.uuid ? "abierta" : ""].filter(Boolean).join(" · "))}</span></button>`).join("") : `<p class="hint">Aún no hay pruebas guardadas en este equipo.</p>`) +
+    `<div id="remotas"></div>`;
   $("#version").textContent = "Versión " + VERSION;
+  renderSesion();
+  cargarRemotas(new Set(list.map(r => r.uuid)));
+}
+
+/* ---------- sesión y sincronización ---------- */
+const ROL_TXT = { tecnico: "técnico", supervisor: "supervisor", admin: "administrador" };
+function renderSesion(msg = "") {
+  const s = sesion(), box = $("#sesionBox");
+  const campo = (id, label, tipo, auto) => `<div class="field"><label for="${id}">${label}</label><div class="inp"><input id="${id}" type="${tipo}" autocomplete="${auto}" autocapitalize="none" spellcheck="false" required></div></div>`;
+  box.innerHTML = s
+    ? `<h4>Servidor ISELEC</h4><p><b>${esc(s.usuario.nombre)}</b> · ${esc(ROL_TXT[s.usuario.rol] || s.usuario.rol)}</p>
+       <div class="btnrow"><button class="btn primary" type="button" id="btnSync">Sincronizar ahora</button><button class="btn" type="button" id="btnClave">Cambiar contraseña</button><button class="btn" type="button" id="btnLogout">Cerrar sesión</button></div>
+       <form id="claveForm" hidden><div class="fields">${campo("claveActual", "Contraseña actual", "password", "current-password")}${campo("claveNueva", "Contraseña nueva (mín. 10 caracteres)", "password", "new-password")}</div><button class="btn" type="submit">Guardar contraseña</button></form>
+       <p class="hint" id="syncMsg">${esc(msg)}</p>`
+    : `<h4>Servidor ISELEC</h4>
+       <form id="loginForm"><div class="fields">${campo("loginUsuario", "Usuario", "text", "username")}${campo("loginClave", "Contraseña", "password", "current-password")}</div><button class="btn primary" type="submit">Iniciar sesión</button></form>
+       <p class="hint" id="syncMsg">${esc(msg || "Sin sesión la app funciona igual: las pruebas quedan en este celular y se suben cuando inicies sesión.")}</p>`;
+}
+function errorTxt(e) { return e instanceof ApiError ? e.message : "Ocurrió un error inesperado"; }
+
+document.addEventListener("submit", async e => {
+  const f = e.target; if (f.id !== "loginForm" && f.id !== "claveForm") return;
+  e.preventDefault();
+  const btn = f.querySelector("button[type=submit]"); btn.disabled = true;
+  try {
+    if (f.id === "loginForm") {
+      const u = await login($("#loginUsuario").value.trim(), $("#loginClave").value);
+      toast("Sesión iniciada: " + u.nombre);
+      await renderReports(); await sincronizarAhora();
+    } else {
+      if ($("#claveNueva").value.length < 10) { $("#syncMsg").textContent = "La contraseña nueva debe tener al menos 10 caracteres."; return; }
+      await cambiarClave($("#claveActual").value, $("#claveNueva").value);
+      renderSesion("Contraseña cambiada."); toast("Contraseña cambiada");
+    }
+  } catch (err) { const m = $("#syncMsg"); if (m) m.textContent = errorTxt(err); }
+  finally { btn.disabled = false; }
+});
+
+async function sincronizarAhora() {
+  const m = () => $("#syncMsg"); if (m()) m().textContent = "Sincronizando…";
+  const r = await sync.sincronizar().catch(() => ({ motivo: "error", subidas: 0, conflictos: 0, errores: 1 }));
+  const txt = r.motivo === "sin_red" ? "Sin conexión con el servidor. Las pruebas siguen guardadas aquí y se subirán después."
+    : r.motivo === "sin_sesion" ? "La sesión venció. Inicia sesión de nuevo."
+    : r.conflictos ? `${r.conflictos} prueba(s) con conflicto: ábrelas para elegir la versión.`
+    : r.errores ? `${r.errores} prueba(s) no se pudieron subir. Ábrelas para ver el motivo.`
+    : r.subidas ? `${r.subidas} prueba(s) subidas.` : "Todo está al día.";
+  if (!$("#sheetReports").hidden) { await renderReports(); if (m()) m().textContent = txt; }
+  return r;
+}
+
+// Pruebas que están en el servidor y no en este celular (otro equipo, o las de los técnicos para el supervisor)
+async function cargarRemotas(locales) {
+  if (!sesion() || navigator.onLine === false) return;
+  try {
+    const rem = (await sync.listarServidor()).filter(r => !locales.has(r.uuid));
+    const el = $("#remotas"); if (!el || !rem.length) return;
+    el.innerHTML = `<h4>En el servidor</h4>` + rem.map(r => `<button class="rep" type="button" data-traer="${esc(r.uuid)}"><b>${esc(r.tag || "Sin TAG")} · ${esc(r.cliente || "Sin cliente")}</b><span class="hint">${esc([r.fecha, r.dictamen || "sin dictamen", r.estado, r.tecnico, "tocar para traerla"].filter(Boolean).join(" · "))}</span></button>`).join("");
+  } catch (e) { /* sin red: la lista local basta */ }
+}
+async function traerDelServidor(uuid) {
+  try { const p = await sync.traer(uuid); await db.putPrueba(p); await abrir(p); toast("Prueba traída del servidor"); }
+  catch (e) { toast(errorTxt(e)); }
+}
+async function usarServidor() {
+  const c = S.conflicto; if (!c) return;
+  const base = c.datos && typeof c.datos === "object" ? c.datos : {};
+  const p = { c: {}, obs: {}, photos: {}, ...base, v: base.v || {}, uuid: S.uuid, step: S.step, rev: c.rev, estado: c.estado, estadoServidor: c.estado, dirty: false, sincronizada: c.actualizado_en };
+  clearTimeout(saveT); saveT = null;
+  await db.putPrueba(p); await abrir(p); toast("Se cargó la versión del servidor");
+}
+function cerrarPrueba() {
+  if (!S.v.dictamen) { toast("Elige el dictamen antes de cerrar la prueba"); const d = $("#f_dictamen"); if (d) d.focus(); return; }
+  if (!confirm("¿Cerrar la prueba?\n\nQueda en solo lectura y pasa a revisión del supervisor.")) return;
+  S.estado = "cerrada"; S.cerrada = new Date().toISOString();
+  save(true); render(); scrollTo(0, 0); sync.programar(300);
+  toast(sesion() ? "Prueba cerrada" : "Prueba cerrada. Inicia sesión para subirla");
 }
 
 /* ---------- fotos ---------- */
@@ -325,6 +457,11 @@ async function init() {
   let inicial = null;
   try { const id = await db.getMeta("actual"); if (id) inicial = await db.getPrueba(id); } catch (e) { /* IndexedDB no disponible */ }
   await abrir(inicial || sampleState());
+  sync.configurar({ antes: () => (saveT ? flush() : savePend || Promise.resolve()), parchar });
+  addEventListener("online", () => sync.programar(1000));
+  addEventListener("pm-sesion", () => { setSaveState(textoEstado()); if (!$("#sheetReports").hidden) renderSesion(); });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) sync.programar(1500); });
+  sync.programar(2000);
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); // pide que el navegador no borre los datos
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 }
