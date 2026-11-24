@@ -3,6 +3,7 @@
 // resultado, alguien movió un umbral.
 import { test, igual, cierto } from "./mini.js";
 import { evalTermo, evalVib, vibLimits, evalRes, evalIR, evalPI, evalRun, currentFLA, r40, num } from "../js/evaluadores.js";
+import { textoPDF } from "../js/pdf.js";
 import { STEPS, allEvals, suggested, stepChecks, stepFields } from "../js/protocolo.js";
 
 const P = (v = {}, vib = false) => ({ v, vib });
@@ -181,6 +182,26 @@ test("currentFLA: casos simples", () => {
 // con tres voltajes y dos corrientes el índice se desalinea y a 230 V devuelve 30 A (debería ser 60 A).
 test("currentFLA: placa 208-230/460 con 60/30 a 230 V devuelve 30 A (defecto conocido)", () =>
   igual(currentFLA(P({ vplaca: "208-230/460", aplaca: "60/30", vserv: "230" })), 30));
+
+/* ---------- texto del informe PDF ---------- */
+test("textoPDF: sustituye los símbolos que Helvetica no tiene", () => {
+  igual(textoPDF("ΔT entre conexiones similares"), "Delta T entre conexiones similares");
+  igual(textoPDF("850 MΩ · 425 MΩ a 40 °C"), "850 Mohm · 425 Mohm a 40 °C");
+  igual(textoPDF("Promedio 0.623 Ω"), "Promedio 0.623 ohm");
+  igual(textoPDF("≤5 % normal"), "<= 5 % normal");
+  igual(textoPDF("Delta (Δ)"), "Delta (D)");
+  igual(textoPDF("ΔΔ paralelo, bajo voltaje"), "Delta-Delta paralelo, bajo voltaje");
+  igual(textoPDF("Δ serie, alto voltaje"), "Delta serie, alto voltaje");
+  igual(textoPDF("pintura ≈ 0.95"), "pintura aprox. 0.95");
+  igual(textoPDF("±10 % · N.º · FLA × FS · °C · ñ á"), "±10 % · N.º · FLA × FS · °C · ñ á", "Latin-1 no se toca;");
+  igual(textoPDF(null), "");
+});
+test("textoPDF: ningún texto del protocolo ni de los evaluadores queda fuera de Latin-1", () => {
+  const p = P({ tamb: 30, tbornes: 45, tla: 60, tcarc: 60, clase: "F", dtfases: 2, kw: 20, vla_h: 1, hilos: "12", twind: 30, r1: .6, r2: .6, r3: .6, r4: .6, r5: .6, r6: .6,
+    ir1: 850, irab: 900, pi: 2.5, dar: 1.4, vab: 460, vbc: 461, vca: 462, vserv: 460, ia: 20, ib: 21, ic: 20, aplaca: "30" }, true);
+  const textos = [...allEvals(p).flatMap(e => [e.label, e.value, e.note]), ...STEPS.flatMap(s => [s.title, s.norma, ...stepChecks(s, p), ...stepFields(s, p).flatMap(f => [f[1], typeof f[3] === "string" ? f[3] : ""])])];
+  for (const t of textos) cierto(!/[^\u0000-ÿ]|\?/.test(textoPDF(t).replace(/¿[^?]*\?/g, "")), "queda fuera de Latin-1: " + t);
+});
 
 /* ---------- protocolo ---------- */
 test("protocolo: 15 pasos con identificadores únicos", () => {

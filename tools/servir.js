@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 const RAIZ = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const PUERTO = Number(process.argv[2] || process.env.PORT || 8123);
 const TIPOS = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
-  ".json": "application/json", ".webmanifest": "application/manifest+json", ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml" };
+  ".json": "application/json", ".webmanifest": "application/manifest+json", ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".pdf": "application/pdf" };
 
 createServer(async (req, res) => {
   let ruta = decodeURIComponent(new URL(req.url, "http://x").pathname);

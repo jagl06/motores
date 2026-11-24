@@ -5,7 +5,7 @@ import * as db from "./db.js";
 import { comprimir, aDataURL, deDataURL } from "./fotos.js";
 import { generarPDF } from "./pdf.js";
 
-export const VERSION = "1.0.0-etapa1";
+export const VERSION = "1.0.1-etapa1";
 
 /* ---------- utilidades ---------- */
 const $ = s => document.querySelector(s);
@@ -225,7 +225,16 @@ function quitarFoto(paso, i) {
 }
 
 /* ---------- archivos ---------- */
-function saveFile(nombre, blob) {
+// En teléfonos abre la hoja de compartir del sistema (WhatsApp, correo, Guardar en Archivos),
+// que es lo que el técnico necesita para enviar el informe. Si no existe o falla, descarga.
+async function saveFile(nombre, blob) {
+  try {
+    const archivo = new File([blob], nombre, { type: blob.type });
+    if (matchMedia("(pointer: coarse)").matches && navigator.canShare && navigator.canShare({ files: [archivo] })) {
+      try { await navigator.share({ files: [archivo], title: nombre }); return; }
+      catch (err) { if (err && err.name === "AbortError") return; /* otro error: se descarga */ }
+    }
+  } catch (err) { /* sin File o sin share: se descarga */ }
   try {
     const u = URL.createObjectURL(blob), a = document.createElement("a");
     a.href = u; a.download = nombre; document.body.appendChild(a); a.click(); a.remove();
@@ -246,7 +255,7 @@ async function makePDF() {
       for (const id of ids) if (blobs.has(id)) { try { fotos[paso].push(await aDataURL(blobs.get(id), 1000, 0.7)); } catch (e) { /* foto ilegible */ } }
     }
     const { nombre, blob } = generarPDF(S, fotos);
-    saveFile(nombre, blob);
+    await saveFile(nombre, blob);
   } catch (err) { console.error(err); toast("No se pudo generar el informe"); }
   finally { pdfBusy = false; }
 }
@@ -265,7 +274,7 @@ async function exportar() {
       }
     }
     if (!arr.length) { toast("No hay pruebas guardadas para exportar"); return; }
-    saveFile("pruebas-motores-" + hoy() + ".json", new Blob([JSON.stringify(arr)], { type: "application/json" }));
+    await saveFile("pruebas-motores-" + hoy() + ".json", new Blob([JSON.stringify(arr)], { type: "application/json" }));
   } catch (err) { console.error(err); toast("No se pudo exportar"); }
 }
 // Acepta respaldos de esta app y archivos JSON del prototipo (fotos como data URL en `photos`)
