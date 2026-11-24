@@ -26,7 +26,7 @@ export function evalTermo(p) {
   const tb = num(g("tbornes"));
   if (tb != null && ta != null) {
     const r = tb - ta; const st = r <= 10 ? "ok" : r <= 20 ? "warn" : "fail";
-    out.push(E("Caja de bornes sobre ambiente", fmt(r, 1) + " °C", st, r <= 10 ? "NETA 1-10 °C: posible deficiencia si hay punto caliente localizado" : r <= 20 ? "NETA 11-20 °C: deficiencia probable" : "NETA >20 °C: monitorear o reparar según magnitud"));
+    out.push(E("Caja de bornes sobre ambiente", fmt(r, 1) + " °C", st, r <= 10 ? "Dentro de 10 °C sobre ambiente; revisar solo si hay punto caliente localizado" : r <= 20 ? "NETA 11-20 °C: deficiencia probable" : "NETA >20 °C: monitorear o reparar según magnitud"));
   }
   for (const [id, nm] of [["tla", "Rodamiento lado acople"], ["tloa", "Rodamiento lado opuesto"]]) {
     const t = num(g(id)); if (t == null) continue;
