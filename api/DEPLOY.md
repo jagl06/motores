@@ -77,6 +77,24 @@ php bin/usuario.php rol <usuario> <rol>
 php bin/usuario.php desactivar <usuario>   # activar <usuario> lo revierte
 ```
 
+## Probar en un equipo de desarrollo
+
+Con PHP 8 y MariaDB o MySQL locales (base vacía y `config.php` apuntando a ella, con
+`'origenes' => ['http://localhost:8123']`):
+
+```
+php bin/migrar.php
+php bin/usuario.php crear tecnico1 "Técnico Uno" tecnico      > claves.txt
+php bin/usuario.php crear tecnico2 "Técnico Dos" tecnico      >> claves.txt
+php bin/usuario.php crear supervisor1 "Supervisora Uno" supervisor >> claves.txt
+php -S 127.0.0.1:8125 -t public public/index.php
+node ../tools/probar-api.js http://127.0.0.1:8125 claves.txt     # 57 comprobaciones
+```
+
+`probar-api.js` crea y cierra pruebas y bloquea un usuario ficticio: es solo para desarrollo y se
+niega a correr contra `iselec.com.pa`. Para usar la app local contra esa API, en la consola del
+navegador: `localStorage.pm_api = "http://localhost:8125"`.
+
 ## Endpoints de esta etapa
 
 | Método | Ruta | Uso |

@@ -123,7 +123,7 @@ function prueba_o_404(string $uuid, bool $bloquear = false): array
 function prueba_completa(array $f): array
 {
     return prueba_resumida($f) + [
-        'datos' => json_decode($f['datos'], true),
+        'datos' => json_decode($f['datos']), // como objeto: conserva {} vacíos
         'cerrada_en' => iso($f['cerrada_en']),
         'aprobada_en' => iso($f['aprobada_en']),
     ];
@@ -155,11 +155,15 @@ function pruebas_guardar(string $uuid): void
     }
     $revBase = (int) ($c['rev'] ?? 0);
     $cerrar  = ($c['cerrar'] ?? false) === true;
-    $resumen = is_array($c['resumen'] ?? null) ? json_encode($c['resumen'], JSON_UNESCAPED_UNICODE) : null;
-
-    $datos['uuid'] = $uuid;
-    unset($datos['dirty'], $datos['conflicto'], $datos['rev'], $datos['estado'], $datos['fotosData'], $datos['sample']);
-    $json = json_encode($datos, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    // Lo que se guarda sale de la forma "objeto" del cuerpo, para conservar {} como {} (ver cuerpo_objeto)
+    $obj = cuerpo_objeto();
+    $resumen = is_array($c['resumen'] ?? null) ? json_encode($obj->resumen, JSON_UNESCAPED_UNICODE) : null;
+    $guardar = $obj->datos;
+    foreach (['dirty', 'conflicto', 'rev', 'estado', 'fotosData', 'sample'] as $k) {
+        unset($guardar->$k);
+    }
+    $guardar->uuid = $uuid;
+    $json = json_encode($guardar, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     if ($json === false || strlen($json) > MAX_DATOS_BYTES) {
         throw new ErrorHttp(413, 'La prueba es demasiado grande', 'muy_grande');
     }
@@ -210,7 +214,7 @@ function pruebas_guardar(string $uuid): void
 
         if ($revBase !== $rev && !$igual) {
             throw new ErrorHttp(409, 'La prueba cambió en el servidor desde otro equipo', 'conflicto', [
-                'servidor' => ['rev' => $rev, 'estado' => $act['estado'], 'datos' => json_decode($act['datos'], true), 'actualizado_en' => iso($act['actualizado_en'])],
+                'servidor' => ['rev' => $rev, 'estado' => $act['estado'], 'datos' => json_decode($act['datos']), 'actualizado_en' => iso($act['actualizado_en'])],
             ]);
         }
 

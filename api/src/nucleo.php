@@ -81,7 +81,23 @@ function cuerpo(int $maxBytes = 1048576): array
     if (!is_array($d)) {
         throw new ErrorHttp(400, 'El cuerpo no es JSON válido', 'json_invalido');
     }
+    cuerpo_objeto(json_decode($crudo, false, 64));
     return $d;
+}
+
+/**
+ * El mismo cuerpo decodificado como objetos (stdClass). Se usa para lo que se guarda tal cual:
+ * como arreglo asociativo, PHP no distingue {} de [] y un objeto vacío volvería al teléfono como lista.
+ * @param mixed $nuevo
+ * @return mixed
+ */
+function cuerpo_objeto($nuevo = null)
+{
+    static $o = null;
+    if ($nuevo !== null) {
+        $o = $nuevo;
+    }
+    return $o;
 }
 
 /** CORS limitado a los orígenes configurados. Responde aquí mismo las peticiones OPTIONS. */
