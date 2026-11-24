@@ -1,0 +1,10 @@
+{
+  "name": "motores-iselec",
+  "private": true,
+  "type": "module",
+  "description": "Sin dependencias ni build. Este archivo solo indica a Node que los .js son módulos ES.",
+  "scripts": {
+    "test": "node tests/run-node.js",
+    "servir": "node tools/servir.js"
+  }
+}

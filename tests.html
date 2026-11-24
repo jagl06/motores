@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pruebas de evaluadores · Motores ISELEC</title>
+<style>
+  body{font:15px system-ui,sans-serif;margin:16px;max-width:760px}
+  h1{font-size:20px} .ok{color:#1f7a45} .fail{color:#b3261e;font-weight:600}
+  li{margin:3px 0} code{display:block;color:#b3261e;font-size:13px}
+</style>
+</head>
+<body>
+<h1>Pruebas de evaluadores</h1>
+<p id="resumen">Corriendo…</p>
+<ul id="lista"></ul>
+<script type="module">
+import { resultados } from "./tests/mini.js";
+import "./tests/evaluadores.test.js";
+const fallas = resultados.filter(r => !r.ok);
+const res = document.getElementById("resumen");
+res.textContent = `${resultados.length - fallas.length} de ${resultados.length} pruebas pasan`;
+res.className = fallas.length ? "fail" : "ok";
+const ul = document.getElementById("lista");
+for (const r of [...fallas, ...resultados.filter(r => r.ok)]) {
+  const li = document.createElement("li"); li.className = r.ok ? "ok" : "fail";
+  li.textContent = (r.ok ? "✓ " : "✗ ") + r.nombre;
+  if (!r.ok) { const c = document.createElement("code"); c.textContent = r.error; li.appendChild(c); }
+  ul.appendChild(li);
+}
+</script>
+</body>
+</html>
