@@ -16,6 +16,13 @@ export function textoPDF(s) {
 }
 const limpia = filas => filas.map(f => f.map(textoPDF));
 
+// Texto y color del recuadro de dictamen del encabezado
+export function dictamenPDF(p) {
+  const d = p.v.dictamen;
+  if (!d) { const s = suggested(p); return { texto: "Dictamen: pendiente" + (s ? " (sugerido: " + s + ")" : ""), color: [90, 104, 118] }; }
+  return { texto: "Dictamen: " + d, color: /No apto/.test(d) ? [179, 38, 30] : /observ/.test(d) ? [154, 100, 0] : [31, 122, 69] };
+}
+
 export function generarPDF(p, fotos = {}) {
   if (!window.jspdf) throw new Error("sin-jspdf");
   const g = id => p.v[id];
@@ -35,10 +42,11 @@ export function generarPDF(p, fotos = {}) {
   const after = () => { y = doc.lastAutoTable.finalY + 8; };
 
   // dictamen
-  const dict = g("dictamen") || suggested(p) || "Pendiente";
-  const col = /No apto/.test(dict) ? [179, 38, 30] : /observ/.test(dict) ? [154, 100, 0] : [31, 122, 69];
+  // El dictamen lo decide el técnico: si no lo ha elegido, el recuadro lo dice en gris
+  // y muestra el sugerido solo como referencia, nunca como definitivo.
+  const { texto: dict, color: col } = dictamenPDF(p);
   doc.setDrawColor(...col); doc.setLineWidth(0.8); doc.rect(M, y, W - 2 * M, 14);
-  doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.setTextColor(...col); doc.text("Dictamen: " + dict, M + 4, y + 9);
+  doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.setTextColor(...col); doc.text(dict, M + 4, y + 9);
   doc.setTextColor(20); y += 22;
 
   h2("Datos generales"); kv([["Cliente", g("cliente")], ["Ubicación", g("sitio")], ["TAG", g("tag")], ["Orden de trabajo", g("ot")], ["Técnico", g("tecnico")], ["Supervisor", g("supervisor")], ["Condiciones", `T amb ${g("tamb") || "s/d"} °C · HR ${g("hr") || "s/d"} %`]].map(r => [r[0], r[1] || ""])); after();

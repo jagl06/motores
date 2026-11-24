@@ -1,6 +1,6 @@
 // Service worker: deja la app y sus librerías disponibles sin señal.
 // Al cambiar cualquier archivo de la lista, subir CACHE para forzar la actualización.
-const CACHE = "motores-v2";
+const CACHE = "motores-v3";
 const FUENTES = "motores-fuentes-v1";
 
 const APP = [

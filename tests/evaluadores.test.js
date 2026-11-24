@@ -3,7 +3,7 @@
 // resultado, alguien movió un umbral.
 import { test, igual, cierto } from "./mini.js";
 import { evalTermo, evalVib, vibLimits, evalRes, evalIR, evalPI, evalRun, currentFLA, r40, num } from "../js/evaluadores.js";
-import { textoPDF } from "../js/pdf.js";
+import { textoPDF, dictamenPDF } from "../js/pdf.js";
 import { STEPS, allEvals, suggested, stepChecks, stepFields } from "../js/protocolo.js";
 
 const P = (v = {}, vib = false) => ({ v, vib });
@@ -23,6 +23,11 @@ for (const [dt, esp] of [[0, "ok"], [1, "ok"], [1.1, "warn"], [3, "warn"], [3.1,
 for (const [tb, esp] of [[40, "ok"], [40.1, "warn"], [50, "warn"], [50.1, "fail"]])
   test(`termo: bornes ${tb} °C con ambiente 30 → ${esp}`, () => igual(estado(evalTermo(P({ tamb: 30, tbornes: tb })), "Caja de bornes"), esp));
 
+test("termo: la nota de bornes hasta 10 °C no contradice el estado Cumple", () => {
+  const r = por(evalTermo(P({ tamb: 30, tbornes: 38 })), "Caja de bornes");
+  igual(r.status, "ok"); cierto(r.note.startsWith("Dentro de 10 °C"), r.note); cierto(!/deficiencia/.test(r.note), r.note);
+  cierto(/deficiencia probable/.test(por(evalTermo(P({ tamb: 30, tbornes: 45 })), "Caja de bornes").note));
+});
 test("termo: bornes sin T ambiente no se evalúa", () => igual(por(evalTermo(P({ tbornes: 60 })), "Caja de bornes"), undefined));
 
 for (const [ta, t, esp] of [[30, 70, "ok"], [30, 70.1, "warn"], [30, 80, "warn"], [30, 80.1, "fail"], [45, 80, "ok"], [45, 80.1, "warn"], [50, 95, "warn"], [50, 95.1, "fail"]])
@@ -212,6 +217,17 @@ test("textoPDF: ningún texto del protocolo ni de los evaluadores queda fuera de
     ir1: 850, irab: 900, pi: 2.5, dar: 1.4, vab: 460, vbc: 461, vca: 462, vserv: 460, ia: 20, ib: 21, ic: 20, aplaca: "30" }, true);
   const textos = [...allEvals(p).flatMap(e => [e.label, e.value, e.note]), ...STEPS.flatMap(s => [s.title, s.norma, ...stepChecks(s, p), ...stepFields(s, p).flatMap(f => [f[1], typeof f[3] === "string" ? f[3] : ""])])];
   for (const t of textos) cierto(!/[^\u0000-ÿ]|\?/.test(textoPDF(t).replace(/¿[^?]*\?/g, "")), "queda fuera de Latin-1: " + t);
+});
+
+test("dictamenPDF: sin dictamen elegido el recuadro dice pendiente, en gris", () => {
+  const gris = "90,104,118";
+  const pend = dictamenPDF(P({ clase: "F", pi: 2.5, dar: 1.1 }));
+  igual(pend.texto, "Dictamen: pendiente (sugerido: Apto con observaciones)"); igual(pend.color.join(), gris);
+  igual(dictamenPDF(P({})).texto, "Dictamen: pendiente");
+  const noApto = dictamenPDF(P({ dictamen: "No apto", clase: "F", pi: 2.5 }));
+  igual(noApto.texto, "Dictamen: No apto", "manda el técnico aunque los criterios sugieran otra cosa;"); igual(noApto.color.join(), "179,38,30");
+  igual(dictamenPDF(P({ dictamen: "Apto con observaciones" })).color.join(), "154,100,0");
+  igual(dictamenPDF(P({ dictamen: "Apto para operar" })).color.join(), "31,122,69");
 });
 
 /* ---------- protocolo ---------- */
