@@ -101,13 +101,20 @@ async function subir(p) {
 // valida el contenido real del archivo.
 const TIPO_SUBIDA = "application/octet-stream";
 const referenciadas = p => new Set(Object.values(p.photos || {}).flat());
-const fotosPendientes = async p => { const ref = referenciadas(p); return (await db.fotosDePrueba(p.uuid)).filter(f => !f.subida && ref.has(f.uuid)); };
+// "Ya subió" se anota aparte (almacén meta) y no reescribiendo el registro de la foto: reescribir un Blob
+// en IndexedDB puede invalidar la copia que la pantalla está mostrando.
+const yaSubio = async f => !!f.subida || !!(await db.getMeta("subida:" + f.uuid));
+const fotosPendientes = async p => {
+  const ref = referenciadas(p), pend = [];
+  for (const f of await db.fotosDePrueba(p.uuid)) if (ref.has(f.uuid) && !(await yaSubio(f))) pend.push(f);
+  return pend;
+};
 
 // Fotos: una por petición, cada una con su uuid (repetir no duplica). Después, el informe PDF si la prueba está cerrada.
 async function subirArchivos(p, r) {
   for (const f of await fotosPendientes(p)) {
     await subirArchivo(`/pruebas/${p.uuid}/fotos?foto=${f.uuid}&paso=${encodeURIComponent(f.paso)}`, f.blob, TIPO_SUBIDA);
-    await db.putFoto({ ...f, subida: true }); r.fotos++;
+    await db.setMeta("subida:" + f.uuid, true); r.fotos++;
   }
   const pdf = await db.getPdf(p.uuid);
   if (pdf && !pdf.subido && p.estado === "cerrada") {

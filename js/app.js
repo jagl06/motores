@@ -7,7 +7,7 @@ import { generarPDF } from "./pdf.js";
 import { sesion, login, logout, cambiarClave, ApiError } from "./api.js";
 import * as sync from "./sync.js";
 
-export const VERSION = "1.2.1-etapa3";
+export const VERSION = "1.2.2-etapa3";
 
 /* ---------- utilidades ---------- */
 const $ = s => document.querySelector(s);
@@ -135,6 +135,22 @@ async function parchar(uuid, cambios, marca) {
   }
 }
 
+// Si una miniatura no carga (la referencia en memoria dejó de servir), se vuelve a leer la foto
+// de IndexedDB y se muestra de nuevo, sin obligar a recargar la página. Un solo reintento por imagen.
+document.addEventListener("error", async e => {
+  const t = e.target;
+  if (!(t instanceof HTMLImageElement) || !t.dataset.foto || t.dataset.reintento) return;
+  t.dataset.reintento = "1";
+  const id = t.dataset.foto;
+  try {
+    const f = await db.getFoto(id); if (!f || !f.blob) return;
+    const copia = new Blob([await f.blob.arrayBuffer()], { type: "image/jpeg" }); // copia en memoria, independiente del archivo de la base
+    if (urls.has(id)) { URL.revokeObjectURL(urls.get(id)); urls.delete(id); }
+    blobs.set(id, copia);
+    if (t.isConnected) t.src = fotoURL(id);
+  } catch (err) { /* la foto no está en este equipo */ }
+}, true);
+
 function fotoURL(id) {
   if (!urls.has(id) && blobs.has(id)) urls.set(id, URL.createObjectURL(blobs.get(id)));
   return urls.get(id) || "";
@@ -204,7 +220,7 @@ function render() {
   h += extraHTML(st);
   h += `<section class="block"><h2>Observaciones y fotos</h2><div class="field wide"><label for="obs_${st.id}" class="hint">Observaciones del paso</label><div class="inp"><textarea id="obs_${st.id}" data-o="${st.id}">${esc(S.obs[st.id] || "")}</textarea></div></div>
     <div class="photos">${(S.photos[st.id] || []).map((id, i) => blobs.has(id)
-      ? `<figure><img src="${fotoURL(id)}" alt="Foto ${i + 1} de ${esc(st.title)}"><button type="button" data-delphoto="${i}">Quitar</button></figure>`
+      ? `<figure><img src="${fotoURL(id)}" data-foto="${esc(id)}" alt="Foto ${i + 1} de ${esc(st.title)}"><button type="button" data-delphoto="${i}">Quitar</button></figure>`
       : `<figure class="falta"><span>Foto ${i + 1}<br>sin descargar</span></figure>`).join("")}</div>
     <label class="btn filebtn" for="ph_${st.id}" style="margin-top:8px">Agregar foto o termograma</label><input type="file" accept="image/*" id="ph_${st.id}" data-ph="${st.id}" multiple hidden></section>`;
   if (st.id === "dictamen" && !S.sample && !soloLectura()) h += `<section class="block"><h2>Cerrar la prueba</h2>

@@ -42,6 +42,7 @@ export const getPrueba = id => tx("pruebas", "readonly", s => s.get(id));
 export const putPrueba = p => tx("pruebas", "readwrite", s => s.put(p));
 export const listPruebas = () => tx("pruebas", "readonly", s => s.getAll());
 
+export const getFoto = id => tx("fotos", "readonly", s => s.get(id));
 export const putFoto = f => tx("fotos", "readwrite", s => s.put(f));
 export const delFoto = id => tx("fotos", "readwrite", s => s.delete(id));
 export const fotosDePrueba = id => tx("fotos", "readonly", s => s.index("prueba").getAll(id));
