@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Prueba de Motores ISELEC</title>
+<meta name="description" content="Guía de prueba de motores de inducción trifásicos de 6 y 12 hilos, con criterios de aceptación e informe PDF.">
+<meta name="theme-color" content="#24384d">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<script>
+  // Tema guardado antes de pintar, para evitar el destello
+  try { var t = localStorage.getItem("pm_tema"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <div class="toprow">
+      <div class="brand">ISELEC <small id="hdrMotor">Prueba de motor</small></div>
+      <button class="iconbtn" id="btnSteps" type="button">Pasos</button>
+      <button class="iconbtn" id="btnReports" type="button">Pruebas</button>
+    </div>
+    <div class="progress" id="progress"></div>
+    <div class="steplabel"><span id="stepCount"></span><span id="saveState">Guardado en este equipo</span></div>
+  </div>
+</header>
+
+<main class="wrap" id="main"></main>
+
+<button class="fab" id="fab" type="button">Asistente</button>
+
+<nav class="bottom"><div class="wrap">
+  <button class="btn" id="prev" type="button">Anterior</button>
+  <div class="grow"></div>
+  <button class="btn" id="pdfBtn" type="button">Informe PDF</button>
+  <button class="btn primary" id="next" type="button">Siguiente</button>
+</div></nav>
+
+<div class="sheet" id="sheetSteps" hidden><div class="card">
+  <header><h3>Pasos de la prueba</h3><button class="btn" data-close type="button">Cerrar</button></header>
+  <div class="body"><div class="steplist" id="stepList"></div></div>
+</div></div>
+
+<div class="sheet" id="sheetReports" hidden><div class="card">
+  <header><h3>Pruebas guardadas</h3><button class="btn" data-close type="button">Cerrar</button></header>
+  <div class="body">
+    <div class="btnrow">
+      <button class="btn primary" id="newTest" type="button">Nueva prueba</button>
+      <button class="btn" id="exportJson" type="button">Exportar respaldo (JSON)</button>
+      <label class="btn filebtn" for="importJson">Importar JSON</label>
+      <input type="file" id="importJson" accept="application/json,.json" hidden>
+    </div>
+    <div class="reports" id="reportList"></div>
+    <p class="hint">Las pruebas y sus fotos quedan guardadas en este celular y se pueden completar sin conexión. Exporta un respaldo antes de cambiar de equipo o borrar los datos del navegador.</p>
+    <div class="btnrow">
+      <button class="btn" id="btnTema" type="button">Tema: automático</button>
+    </div>
+    <p class="hint" id="version"></p>
+  </div>
+</div></div>
+
+<div class="sheet" id="sheetAI" hidden><div class="card">
+  <header><h3>Asistente técnico</h3><button class="btn" data-close type="button">Cerrar</button></header>
+  <div class="body" id="chat">
+    <div class="msg ai">El asistente se conecta al servidor de ISELEC y todavía no está habilitado en esta versión. El protocolo, los criterios y el informe PDF funcionan completos sin él.</div>
+  </div>
+</div></div>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" crossorigin="anonymous" defer></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
