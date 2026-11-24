@@ -119,6 +119,33 @@ nav.bottom .grow{flex:1}
 .dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)} .dot.fail{background:var(--fail)}
 .reports{display:flex;flex-direction:column;gap:6px}
 .reports button.rep{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;width:100%;min-height:52px;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer;font:14px var(--f-body)}
+/* Historial: gráficas de tendencia. Colores de serie validados para daltonismo y contraste en ambos temas. */
+:root{--s1:#2a78d6;--s2:#eb6834}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--s1:#3987e5;--s2:#d95926}}
+:root[data-theme="dark"]{--s1:#3987e5;--s2:#d95926}
+.graf{margin:0;border:1px solid var(--line);border-radius:10px;padding:10px 10px 6px;position:relative}
+.graf figcaption{font-weight:600;font-size:14px}
+.graf svg{display:block;width:100%;height:auto;overflow:visible}
+.graf .rej{stroke:var(--line);stroke-width:1}
+.graf .umb{stroke:var(--muted);stroke-width:1;stroke-dasharray:4 3}
+.graf .eje{font:400 10px var(--f-mono);fill:var(--muted)}
+.graf .val{font:600 11px var(--f-mono);fill:var(--ink);text-anchor:start}
+.graf .lin{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.graf .pto{stroke:var(--panel);stroke-width:2}
+.graf .lin.s1{stroke:var(--s1)} .graf .pto.s1{fill:var(--s1)} .graf .lin.s2{stroke:var(--s2)} .graf .pto.s2{fill:var(--s2)}
+.graf .toca{fill:transparent;cursor:pointer;outline:none}
+.graf .toca.sel,.graf .toca:focus-visible{stroke:var(--ink);stroke-width:1.5}
+.graf .ley{display:flex;gap:14px;font-size:12px;color:var(--muted);margin-top:2px}
+.graf .ley i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px}
+.graf .ley i.s1{background:var(--s1)} .graf .ley i.s2{background:var(--s2)}
+.graf .lectura{font:500 12.5px var(--f-mono);color:var(--ink);background:var(--bg);border-radius:6px;padding:6px 8px;margin:4px 0 2px}
+.tabla-h{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+.tabla-h table{border-collapse:collapse;width:100%;font-size:13px;white-space:nowrap}
+.tabla-h th,.tabla-h td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line)}
+.tabla-h th{font-weight:600;color:var(--muted);font-size:12px}
+.tabla-h td:nth-child(n+2):nth-child(-n+5){font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.tabla-h tr:last-child td{border-bottom:0}
+.tabla-h tr.esta td{background:var(--warn-bg)}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(150px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:8px;font-size:14px;z-index:50;max-width:calc(100% - 32px);width:max-content}
 .summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .sbox{border-radius:8px;padding:10px;background:var(--na-bg);font-size:13px;min-width:0}

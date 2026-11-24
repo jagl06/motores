@@ -1,11 +1,11 @@
 // Service worker: deja la app y sus librerías disponibles sin señal.
 // Al cambiar cualquier archivo de la lista, subir CACHE para forzar la actualización.
-const CACHE = "motores-v8";
+const CACHE = "motores-v9";
 const FUENTES = "motores-fuentes-v1";
 
 const APP = [
   "./", "index.html", "css/app.css", "manifest.webmanifest",
-  "js/app.js", "js/conexiones.js", "js/evaluadores.js", "js/protocolo.js", "js/db.js", "js/fotos.js", "js/pdf.js", "js/api.js", "js/sync.js",
+  "js/app.js", "js/conexiones.js", "js/evaluadores.js", "js/protocolo.js", "js/db.js", "js/fotos.js", "js/pdf.js", "js/api.js", "js/sync.js", "js/historial.js",
   "icons/icon-192.png", "icons/icon-512.png"
 ];
 const CDN = [

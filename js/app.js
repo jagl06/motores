@@ -6,8 +6,9 @@ import { comprimir, aDataURL, deDataURL } from "./fotos.js";
 import { generarPDF } from "./pdf.js";
 import { sesion, login, logout, cambiarClave, ApiError } from "./api.js";
 import * as sync from "./sync.js";
+import { cargarHistorial, historialHTML } from "./historial.js";
 
-export const VERSION = "1.2.2-etapa3";
+export const VERSION = "1.3.0-etapa5";
 
 /* ---------- utilidades ---------- */
 const $ = s => document.querySelector(s);
@@ -223,6 +224,9 @@ function render() {
       ? `<figure><img src="${fotoURL(id)}" data-foto="${esc(id)}" alt="Foto ${i + 1} de ${esc(st.title)}"><button type="button" data-delphoto="${i}">Quitar</button></figure>`
       : `<figure class="falta"><span>Foto ${i + 1}<br>sin descargar</span></figure>`).join("")}</div>
     <label class="btn filebtn" for="ph_${st.id}" style="margin-top:8px">Agregar foto o termograma</label><input type="file" accept="image/*" id="ph_${st.id}" data-ph="${st.id}" multiple hidden></section>`;
+  if ((st.id === "placa" || st.id === "dictamen") && !S.sample) h += `<section class="block"><h2>Historial del motor</h2>
+    <p class="hint">Tendencia de aislamiento, PI y resistencia en las pruebas anteriores de este motor (por número de serie, o por TAG y cliente).</p>
+    <button class="btn" type="button" id="verHistorial">Ver historial</button></section>`;
   if (st.id === "dictamen" && !S.sample && !soloLectura()) h += `<section class="block"><h2>Cerrar la prueba</h2>
     <p class="hint">Al cerrarla queda en solo lectura y pasa a revisión del supervisor. Antes de cerrar, elige el dictamen.</p>
     <button class="btn primary" type="button" id="cerrarPrueba">Cerrar prueba</button></section>`;
@@ -268,6 +272,7 @@ document.addEventListener("click", async e => {
   else if (t.id === "cerrarPrueba") cerrarPrueba();
   else if (t.id === "reabrir") { S.estado = "borrador"; delete S.cerrada; db.delPdf(S.uuid).catch(() => {}); save(); render(); toast("Prueba reabierta"); }
   else if (t.id === "aprobar" || t.id === "devolver") await revisar(t.id);
+  else if (t.id === "verHistorial") await verHistorial();
   else if (t.id === "usarLocal") { S.rev = S.conflicto.rev; delete S.conflicto; save(true); render(); sync.programar(300); toast("Se conserva la versión de este celular"); }
   else if (t.id === "usarServidor") await usarServidor();
   else if (t.id === "btnSync") await sincronizarAhora();
@@ -404,6 +409,27 @@ async function revisar(accion) {
     toast(accion === "aprobar" ? (r.sellado === false ? "Prueba aprobada. El sello se agregará al generar el informe" : "Prueba aprobada e informe sellado") : "Prueba devuelta al técnico");
   } catch (e) { toast(errorTxt(e)); }
 }
+
+/* ---------- historial del motor ---------- */
+async function verHistorial() {
+  const cuerpo = $("#histBody"); $("#sheetHist").hidden = false;
+  if (!(S.v.serie || "").trim() && !(S.v.tag || "").trim()) { cuerpo.innerHTML = `<p>Escribe el número de serie o el TAG del motor en los pasos 1 y 2 para buscar su historial.</p>`; return; }
+  if (!sesion()) { cuerpo.innerHTML = `<p>El historial está en el servidor de ISELEC. Inicia sesión en <b>Pruebas</b> para consultarlo.</p>`; return; }
+  cuerpo.innerHTML = `<p class="hint">Consultando…</p>`;
+  try {
+    if (saveT) await flush();
+    await sync.sincronizar().catch(() => {}); // para que esta prueba entre con sus últimos valores
+    cuerpo.innerHTML = historialHTML(await cargarHistorial(S.v), S);
+  } catch (e) { cuerpo.innerHTML = `<p>${esc(e instanceof ApiError && e.estado === 0 ? "Sin conexión con el servidor. El historial necesita red." : errorTxt(e))}</p>`; }
+}
+// Lectura de un punto de la gráfica (al tocarlo, pasar el cursor o enfocarlo con el teclado)
+function mostrarLectura(el) {
+  const fig = el.closest(".graf"); if (!fig) return;
+  let tip = fig.querySelector(".lectura"); if (!tip) { tip = document.createElement("div"); tip.className = "lectura"; tip.setAttribute("role", "status"); fig.appendChild(tip); }
+  tip.textContent = el.dataset.tip;
+  fig.querySelectorAll(".toca.sel").forEach(c => c.classList.remove("sel")); el.classList.add("sel");
+}
+for (const ev of ["pointerover", "click", "focusin"]) document.addEventListener(ev, e => { const t = e.target; if (t instanceof Element && t.matches(".toca")) mostrarLectura(t); });
 
 /* ---------- fotos ---------- */
 async function agregarFotos(paso, archivos) {
