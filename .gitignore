@@ -1,0 +1,16 @@
+# Secretos y configuración del servidor: nunca al repo
+api/config.php
+.env
+.env.*
+
+# Archivos subidos (fotos, PDFs) y dependencias de Composer
+api/storage/
+api/vendor/
+
+# Sistema y editores
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+node_modules/
