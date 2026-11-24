@@ -22,12 +22,23 @@ return [
     // Carpeta de fotos y PDFs (etapa 3). Debe quedar fuera de public/.
     'storage' => __DIR__ . '/storage',
 
-    // Asistente (etapa 4). La key de Anthropic solo vive aquí.
+    // Asistente de IA. La API key de Anthropic solo vive aquí: nunca en el repositorio ni en la app.
+    // Con 'api_key' vacía el asistente queda apagado y la app lo indica; todo lo demás sigue funcionando.
     'anthropic' => [
         'api_key'       => '',
         'modelo'        => 'claude-sonnet-5-5',
+        // Tope de la respuesta (incluye el razonamiento interno del modelo). Con 1024 la respuesta
+        // termina antes del corte de 60 s del hosting; si las respuestas salen cortadas, subir a 2048.
         'max_tokens'    => 1024,
+        // Consultas permitidas por usuario y por día (día de Panamá).
         'consultas_dia' => 40,
+        // Equipos de medición que tiene ISELEC. El asistente los toma de aquí: al comprar o cambiar
+        // un instrumento se edita esta línea, sin tocar el código. Se puede poner marca y modelo.
+        'equipos'       => 'cámara termográfica, megóhmetro con función PI/DAR (aislamiento de 50 a 1000 V, resistencia con resolución de 0.1 Ω, voltaje), multímetro, pinza amperimétrica y termómetro infrarrojo. Aún no hay medidor de vibración.',
+        // Profundidad de razonamiento: 'low' es rápido y barato, suficiente para consultas de campo.
+        'esfuerzo'      => 'low',
+        // true: si el modelo declina una consulta por sus filtros de seguridad, la API la reintenta en un modelo de respaldo.
+        'respaldo'      => true,
     ],
 
     // true solo para diagnosticar: incluye el detalle del error en la respuesta.

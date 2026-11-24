@@ -10,6 +10,7 @@ require __DIR__ . '/../src/pruebas.php';
 require __DIR__ . '/../src/archivos.php';
 require __DIR__ . '/../src/revision.php';
 require __DIR__ . '/../src/historial.php';
+require __DIR__ . '/../src/asistente.php';
 
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
@@ -37,6 +38,8 @@ try {
         ['GET',  '#^/pruebas/([0-9a-fA-F-]{36})/pdf$#',    'pdf_obtener'],
         ['POST', '#^/pruebas/([0-9a-fA-F-]{36})/aprobar$#',  'pruebas_aprobar'],
         ['POST', '#^/pruebas/([0-9a-fA-F-]{36})/devolver$#', 'pruebas_devolver'],
+        ['POST', '#^/asistente$#',                     'asistente_consulta'],
+        ['GET',  '#^/asistente/uso$#',                 'asistente_uso'],
         ['GET',  '#^/motores/historial$#',             'motores_historial'],
         ['GET',  '#^/motores/([^/]{1,80})/historial$#', 'motores_historial'],
     ];
