@@ -7,7 +7,7 @@ import { generarPDF } from "./pdf.js";
 import { sesion, login, logout, cambiarClave, ApiError } from "./api.js";
 import * as sync from "./sync.js";
 
-export const VERSION = "1.1.0-etapa2";
+export const VERSION = "1.2.0-etapa3";
 
 /* ---------- utilidades ---------- */
 const $ = s => document.querySelector(s);
@@ -26,15 +26,16 @@ function hoy() { const d = new Date(); return `${d.getFullYear()}-${String(d.get
 function blankState() {
   return { uuid: db.uuid(), created: new Date().toISOString(), step: 0, vib: false, estado: "borrador", rev: 0,
     v: { fecha: hoy(), hilos: "12", clase: "F", vprueba: "500", base: "Rígida", ...(sesion() ? { tecnico: sesion().usuario.nombre } : {}) },
+    ...(sesion() ? { duenoId: sesion().usuario.id } : {}),
     c: {}, obs: {}, photos: {} };
 }
 // Cerrada, aprobada o de otro técnico: se puede ver y sacar el PDF, pero no editar
-const soloLectura = () => !S.sample && (S.estado !== "borrador" || !!S.ajena);
+const soloLectura = () => !S.sample && (S.estado !== "borrador" || sync.esAjena(S));
 function textoEstado() {
   if (S.sample) return "Ejemplo, no se guarda";
   if (S.conflicto) return "Conflicto con el servidor";
   if (!sesion()) return "Guardado en este equipo";
-  return S.dirty ? "Guardado · por subir" : "Sincronizada";
+  return S.dirty ? "Guardado · por subir" : S.archivosPend ? "Subiendo archivos…" : "Sincronizada";
 }
 function sampleState() {
   const s = blankState();
@@ -85,6 +86,34 @@ async function abrir(estado) {
   }
   setSaveState(textoEstado());
   closeSheets(); render(); scrollTo(0, 0);
+  bajarFotosFaltantes();
+}
+// Fotos que la prueba referencia y no están en este celular (prueba traída del servidor): se bajan y se guardan aquí
+async function bajarFotosFaltantes() {
+  const p = S; if (p.sample || !sesion() || navigator.onLine === false || !(p.rev > 0)) return;
+  for (const [paso, ids] of Object.entries(p.photos || {})) {
+    for (const id of ids) {
+      if (blobs.has(id) || S !== p) continue;
+      try {
+        const blob = await sync.bajarFoto(p.uuid, id);
+        await db.putFoto({ uuid: id, prueba: p.uuid, paso, blob, subida: true, creada: new Date().toISOString() });
+        if (S === p) { blobs.set(id, blob); if (STEPS[S.step].id === paso) render(); }
+      } catch (e) { if (e instanceof ApiError && (e.estado === 0 || e.estado === 401)) return; /* 404: aún no ha subido */ }
+    }
+  }
+}
+// Reemplaza una prueba local por la versión del servidor (aprobada, devuelta o editada en otro equipo)
+async function reemplazar(uuid, nueva, estadoAntes) {
+  await db.putPrueba(nueva);
+  if (!S || S.sample || S.uuid !== uuid) return;
+  clearTimeout(saveT); saveT = null;
+  S = nueva; setSaveState(textoEstado()); render(); bajarFotosFaltantes();
+  if (nueva.estado === "aprobada" && estadoAntes !== "aprobada") toast("Prueba aprobada por " + ((nueva.aprobacion && nueva.aprobacion.nombre) || "el supervisor"));
+  else if (nueva.devolucion && estadoAntes === "cerrada") toast("El supervisor devolvió la prueba");
+}
+const esRevisor = () => { const s = sesion(); return !!s && (s.usuario.rol === "supervisor" || s.usuario.rol === "admin"); };
+function fechaCorta(iso) {
+  try { return new Date(iso).toLocaleString("es-ES", { timeZone: "America/Panama", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).replace(",", ""); } catch (e) { return String(iso || ""); }
 }
 // Aplica a una prueba lo que devolvió el servidor (revisión, estado, conflicto) sin marcarla como modificada.
 // `marca` es el `updated` con que se subió: si no cambió desde entonces, ya no está pendiente.
@@ -157,8 +186,11 @@ function render() {
   if (S.sample) h += `<div class="banner"><span><b>Datos de ejemplo.</b> Recorre los pasos para ver cómo funciona. Para una prueba real, empieza una nueva.</span><button class="btn" type="button" id="startReal">Nueva prueba</button></div>`;
   if (S.conflicto) h += `<div class="banner fail"><span><b>Esta prueba cambió en el servidor desde otro equipo.</b> Elige cuál versión conservar; la otra se descarta.</span>
     <div class="btnrow"><button class="btn" type="button" id="usarLocal">Conservar la de este celular</button><button class="btn" type="button" id="usarServidor">Usar la del servidor</button></div></div>`;
-  else if (S.ajena) h += `<div class="banner"><span><b>Prueba de ${esc(S.tecnicoNombre || "otro técnico")}.</b> Solo lectura.</span></div>`;
-  else if (S.estado === "aprobada") h += `<div class="banner ok"><span><b>Prueba aprobada.</b> Solo lectura.</span></div>`;
+  else if (S.estado === "aprobada") h += `<div class="banner ok"><span><b>Prueba aprobada</b>${S.aprobacion ? ` por ${esc(S.aprobacion.nombre || "el supervisor")} el ${esc(fechaCorta(S.aprobacion.fecha))}` : ""}. Solo lectura${sync.esAjena(S) ? `; técnico: ${esc(S.tecnicoNombre || "")}` : ""}.</span></div>`;
+  else if (sync.esAjena(S) && S.estado === "cerrada" && esRevisor()) h += `<div class="banner"><span><b>Por revisar.</b> Prueba de ${esc(S.tecnicoNombre || "un técnico")}. Revisa los pasos, las fotos y el informe antes de decidir.</span>
+    <div class="btnrow"><button class="btn primary" type="button" id="aprobar">Aprobar</button><button class="btn" type="button" id="devolver">Devolver al técnico</button></div></div>`;
+  else if (sync.esAjena(S)) h += `<div class="banner"><span><b>Prueba de ${esc(S.tecnicoNombre || "otro técnico")}.</b> Solo lectura${S.estado === "borrador" ? "; el técnico aún no la ha cerrado" : ""}.</span></div>`;
+  else if (S.estado === "borrador" && S.devolucion) h += `<div class="banner fail"><span><b>Devuelta por ${esc(S.devolucion.nombre || "el supervisor")}:</b> ${esc(S.devolucion.motivo.replace(/[.\s]+$/, ""))}. Corrígela y vuelve a cerrarla.</span></div>`;
   else if (S.estado === "cerrada") h += `<div class="banner"><span><b>Prueba cerrada.</b> Solo lectura${S.estadoServidor === "cerrada" ? "; pendiente de revisión del supervisor." : sesion() ? "; se subirá al servidor al haber conexión." : "; inicia sesión para subirla al servidor."}</span>
     ${S.estadoServidor === "cerrada" ? "" : `<button class="btn" type="button" id="reabrir">Reabrir</button>`}</div>`;
   if (S.errorSync && !S.conflicto) h += `<div class="banner fail"><span><b>No se pudo subir:</b> ${esc(S.errorSync)}</span></div>`;
@@ -171,7 +203,9 @@ function render() {
   if (st.evaluate) h += `<section class="block" id="evalBlock" ${evs.length ? "" : "hidden"}><h2>Evaluación automática</h2><div class="evals" id="evals">${evs.map(evHTML).join("")}</div></section>`;
   h += extraHTML(st);
   h += `<section class="block"><h2>Observaciones y fotos</h2><div class="field wide"><label for="obs_${st.id}" class="hint">Observaciones del paso</label><div class="inp"><textarea id="obs_${st.id}" data-o="${st.id}">${esc(S.obs[st.id] || "")}</textarea></div></div>
-    <div class="photos">${(S.photos[st.id] || []).map((id, i) => `<figure><img src="${fotoURL(id)}" alt="Foto ${i + 1} de ${esc(st.title)}"><button type="button" data-delphoto="${i}">Quitar</button></figure>`).join("")}</div>
+    <div class="photos">${(S.photos[st.id] || []).map((id, i) => blobs.has(id)
+      ? `<figure><img src="${fotoURL(id)}" alt="Foto ${i + 1} de ${esc(st.title)}"><button type="button" data-delphoto="${i}">Quitar</button></figure>`
+      : `<figure class="falta"><span>Foto ${i + 1}<br>sin descargar</span></figure>`).join("")}</div>
     <label class="btn filebtn" for="ph_${st.id}" style="margin-top:8px">Agregar foto o termograma</label><input type="file" accept="image/*" id="ph_${st.id}" data-ph="${st.id}" multiple hidden></section>`;
   if (st.id === "dictamen" && !S.sample && !soloLectura()) h += `<section class="block"><h2>Cerrar la prueba</h2>
     <p class="hint">Al cerrarla queda en solo lectura y pasa a revisión del supervisor. Antes de cerrar, elige el dictamen.</p>
@@ -216,7 +250,8 @@ document.addEventListener("click", async e => {
   if (t.dataset.go != null) go(+t.dataset.go);
   else if (t.dataset.delphoto != null) { if (!soloLectura()) quitarFoto(STEPS[S.step].id, +t.dataset.delphoto); }
   else if (t.id === "cerrarPrueba") cerrarPrueba();
-  else if (t.id === "reabrir") { S.estado = "borrador"; delete S.cerrada; save(); render(); toast("Prueba reabierta"); }
+  else if (t.id === "reabrir") { S.estado = "borrador"; delete S.cerrada; db.delPdf(S.uuid).catch(() => {}); save(); render(); toast("Prueba reabierta"); }
+  else if (t.id === "aprobar" || t.id === "devolver") await revisar(t.id);
   else if (t.id === "usarLocal") { S.rev = S.conflicto.rev; delete S.conflicto; save(true); render(); sync.programar(300); toast("Se conserva la versión de este celular"); }
   else if (t.id === "usarServidor") await usarServidor();
   else if (t.id === "btnSync") await sincronizarAhora();
@@ -246,7 +281,7 @@ async function renderReports() {
   if (saveT) await flush();
   let list = [];
   try { list = (await db.listPruebas()).sort((a, b) => (b.updated || b.created || "").localeCompare(a.updated || a.created || "")); } catch (e) { /* sin base local */ }
-  const marca = r => r.conflicto ? "conflicto" : r.ajena ? "de " + (r.tecnicoNombre || "otro técnico") : !sesion() ? "" : r.dirty ? "por subir" : r.sincronizada ? "sincronizada" : "";
+  const marca = r => r.conflicto ? "conflicto" : sync.esAjena(r) ? "de " + (r.tecnicoNombre || "otro técnico") : r.devolucion && r.estado === "borrador" ? "devuelta por el supervisor" : !sesion() ? "" : (r.dirty || r.archivosPend) ? "por subir" : r.sincronizada ? "sincronizada" : "";
   $("#reportList").innerHTML = `<button class="rep" type="button" data-sample><b>Prueba de ejemplo</b><span class="hint">Motor de 25 HP, 12 hilos, datos ficticios</span></button>` +
     (list.length ? list.map(r => `<button class="rep" type="button" data-open="${esc(r.uuid)}"><b>${esc(r.v.tag || "Sin TAG")} · ${esc(r.v.cliente || "Sin cliente")}</b><span class="hint">${esc([r.v.fecha, r.v.hp ? r.v.hp + " HP" : "", r.v.hilos ? r.v.hilos + " hilos" : "", r.v.dictamen || "sin dictamen", r.estado && r.estado !== "borrador" ? r.estado : "", marca(r), !S.sample && r.uuid === S.uuid ? "abierta" : ""].filter(Boolean).join(" · "))}</span></button>`).join("") : `<p class="hint">Aún no hay pruebas guardadas en este equipo.</p>`) +
     `<div id="remotas"></div>`;
@@ -296,7 +331,8 @@ async function sincronizarAhora() {
     : r.motivo === "sin_sesion" ? "La sesión venció. Inicia sesión de nuevo."
     : r.conflictos ? `${r.conflictos} prueba(s) con conflicto: ábrelas para elegir la versión.`
     : r.errores ? `${r.errores} prueba(s) no se pudieron subir. Ábrelas para ver el motivo.`
-    : r.subidas ? `${r.subidas} prueba(s) subidas.` : "Todo está al día.";
+    : (r.subidas || r.fotos || r.informes || r.actualizadas) ? [r.subidas && `${r.subidas} prueba(s) subidas`, r.fotos && `${r.fotos} foto(s)`, r.informes && `${r.informes} informe(s)`, r.actualizadas && `${r.actualizadas} actualizada(s) desde el servidor`].filter(Boolean).join(", ") + "."
+    : "Todo está al día.";
   if (!$("#sheetReports").hidden) { await renderReports(); if (m()) m().textContent = txt; }
   return r;
 }
@@ -307,7 +343,12 @@ async function cargarRemotas(locales) {
   try {
     const rem = (await sync.listarServidor()).filter(r => !locales.has(r.uuid));
     const el = $("#remotas"); if (!el || !rem.length) return;
-    el.innerHTML = `<h4>En el servidor</h4>` + rem.map(r => `<button class="rep" type="button" data-traer="${esc(r.uuid)}"><b>${esc(r.tag || "Sin TAG")} · ${esc(r.cliente || "Sin cliente")}</b><span class="hint">${esc([r.fecha, r.dictamen || "sin dictamen", r.estado, r.tecnico, "tocar para traerla"].filter(Boolean).join(" · "))}</span></button>`).join("");
+    const yo = sesion().usuario.id;
+    const fila = r => `<button class="rep" type="button" data-traer="${esc(r.uuid)}"><b>${esc(r.tag || "Sin TAG")} · ${esc(r.cliente || "Sin cliente")}</b><span class="hint">${esc([r.fecha, r.dictamen || "sin dictamen", r.devuelta ? "devuelta" : r.estado, r.tecnico, "tocar para traerla"].filter(Boolean).join(" · "))}</span></button>`;
+    // Para el supervisor, primero lo que espera su revisión
+    const porRevisar = esRevisor() ? rem.filter(r => r.estado === "cerrada" && r.tecnico_id !== yo) : [];
+    const resto = rem.filter(r => !porRevisar.includes(r));
+    el.innerHTML = (porRevisar.length ? `<h4>Por revisar (${porRevisar.length})</h4>` + porRevisar.map(fila).join("") : "") + (resto.length ? `<h4>En el servidor</h4>` + resto.map(fila).join("") : "");
   } catch (e) { /* sin red: la lista local basta */ }
 }
 async function traerDelServidor(uuid) {
@@ -321,12 +362,31 @@ async function usarServidor() {
   clearTimeout(saveT); saveT = null;
   await db.putPrueba(p); await abrir(p); toast("Se cargó la versión del servidor");
 }
-function cerrarPrueba() {
+// Al cerrar se genera el informe que revisará y sellará el supervisor; queda guardado aquí hasta que suba.
+async function cerrarPrueba() {
   if (!S.v.dictamen) { toast("Elige el dictamen antes de cerrar la prueba"); const d = $("#f_dictamen"); if (d) d.focus(); return; }
+  if (!window.jspdf) { toast("No cargó el generador de PDF. Abre la app una vez con conexión antes de cerrar"); return; }
   if (!confirm("¿Cerrar la prueba?\n\nQueda en solo lectura y pasa a revisión del supervisor.")) return;
-  S.estado = "cerrada"; S.cerrada = new Date().toISOString();
+  const p = S;
+  try {
+    const { nombre, blob } = await construirPDF();
+    await db.putPdf({ prueba: p.uuid, nombre, blob, subido: false, creada: new Date().toISOString() });
+  } catch (err) { console.error(err); toast("No se pudo generar el informe; la prueba sigue abierta"); return; }
+  if (S !== p) return;
+  S.estado = "cerrada"; S.cerrada = new Date().toISOString(); S.archivosPend = true; delete S.devolucion;
   save(true); render(); scrollTo(0, 0); sync.programar(300);
   toast(sesion() ? "Prueba cerrada" : "Prueba cerrada. Inicia sesión para subirla");
+}
+// Aprobar o devolver (solo supervisor o administrador)
+async function revisar(accion) {
+  const p = S; let motivo = "";
+  if (accion === "aprobar") { if (!confirm("¿Aprobar esta prueba?\n\nEl informe queda sellado con tu nombre y la fecha, y ya no se puede modificar.")) return; }
+  else { motivo = (prompt("Motivo de la devolución (lo verá el técnico):") || "").trim(); if (!motivo) return; if (motivo.length < 5) { toast("Escribe un motivo más claro"); return; } }
+  try {
+    const r = accion === "aprobar" ? await sync.aprobar(p.uuid) : await sync.devolver(p.uuid, motivo);
+    await reemplazar(p.uuid, { ...(await sync.traer(p.uuid)), step: p.step }, p.estado);
+    toast(accion === "aprobar" ? (r.sellado === false ? "Prueba aprobada. El sello se agregará al generar el informe" : "Prueba aprobada e informe sellado") : "Prueba devuelta al técnico");
+  } catch (e) { toast(errorTxt(e)); }
 }
 
 /* ---------- fotos ---------- */
@@ -340,6 +400,7 @@ async function agregarFotos(paso, archivos) {
       if (!destino.sample) await db.putFoto({ uuid: id, prueba: destino.uuid, paso, blob, creada: new Date().toISOString() });
       if (destino === S) blobs.set(id, blob);
       (destino.photos[paso] = destino.photos[paso] || []).push(id);
+      destino.archivosPend = true;
     } catch (err) { fallas++; }
   }
   if (fallas) toast(fallas === 1 ? "No se pudo leer una imagen" : `No se pudieron leer ${fallas} imágenes`);
@@ -375,18 +436,31 @@ async function saveFile(nombre, blob) {
   } catch (err) { toast("No se pudo guardar el archivo"); }
 }
 
+async function construirPDF() {
+  const fotos = {};
+  for (const [paso, ids] of Object.entries(S.photos)) {
+    fotos[paso] = [];
+    for (const id of ids) if (blobs.has(id)) { try { fotos[paso].push(await aDataURL(blobs.get(id), 1000, 0.7)); } catch (e) { /* foto ilegible */ } }
+  }
+  return generarPDF(S, fotos);
+}
 let pdfBusy = false;
 async function makePDF() {
   if (pdfBusy) return;
-  if (!window.jspdf) { toast("No cargó el generador de PDF. Abre la app una vez con conexión"); return; }
-  pdfBusy = true; toast("Generando informe…");
+  pdfBusy = true;
   try {
-    const fotos = {};
-    for (const [paso, ids] of Object.entries(S.photos)) {
-      fotos[paso] = [];
-      for (const id of ids) if (blobs.has(id)) { try { fotos[paso].push(await aDataURL(blobs.get(id), 1000, 0.7)); } catch (e) { /* foto ilegible */ } }
+    // El informe oficial es el del servidor: el sellado si está aprobada, o el que subió el técnico si la revisa el supervisor
+    if (!S.sample && sesion() && navigator.onLine !== false && (S.estado === "aprobada" || (sync.esAjena(S) && S.estado === "cerrada"))) {
+      try {
+        toast("Descargando informe…");
+        const blob = await sync.bajarPdf(S.uuid);
+        await saveFile(`Informe-${(S.v.tag || "motor").replace(/[^\w-]+/g, "_")}-${S.v.fecha || ""}${S.estado === "aprobada" ? "-aprobado" : ""}.pdf`, blob);
+        return;
+      } catch (e) { if (sync.esAjena(S) && e instanceof ApiError && e.estado === 404) toast("El informe del técnico aún no ha subido; se genera aquí"); }
     }
-    const { nombre, blob } = generarPDF(S, fotos);
+    if (!window.jspdf) { toast("No cargó el generador de PDF. Abre la app una vez con conexión"); return; }
+    toast("Generando informe…");
+    const { nombre, blob } = await construirPDF();
     await saveFile(nombre, blob);
   } catch (err) { console.error(err); toast("No se pudo generar el informe"); }
   finally { pdfBusy = false; }
@@ -457,9 +531,9 @@ async function init() {
   let inicial = null;
   try { const id = await db.getMeta("actual"); if (id) inicial = await db.getPrueba(id); } catch (e) { /* IndexedDB no disponible */ }
   await abrir(inicial || sampleState());
-  sync.configurar({ antes: () => (saveT ? flush() : savePend || Promise.resolve()), parchar });
+  sync.configurar({ antes: () => (saveT ? flush() : savePend || Promise.resolve()), parchar, reemplazar });
   addEventListener("online", () => sync.programar(1000));
-  addEventListener("pm-sesion", () => { setSaveState(textoEstado()); if (!$("#sheetReports").hidden) renderSesion(); });
+  addEventListener("pm-sesion", () => { setSaveState(textoEstado()); render(); if (!$("#sheetReports").hidden) renderSesion(); });
   document.addEventListener("visibilitychange", () => { if (!document.hidden) sync.programar(1500); });
   sync.programar(2000);
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); // pide que el navegador no borre los datos

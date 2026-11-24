@@ -2,6 +2,9 @@
 // Estructura portada del prototipo. `fotos` es { idPaso: [dataURL JPEG, ...] }.
 import { STEPS, stepFields, stepChecks, allEvals, suggested } from "./protocolo.js";
 
+function fechaPanama(iso) {
+  try { return new Date(iso).toLocaleString("es-ES", { timeZone: "America/Panama", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).replace(",", ""); } catch (e) { return String(iso || ""); }
+}
 export const folio = p => p.sample ? "EJEMPLO" : String(p.uuid || "").slice(0, 8).toUpperCase();
 
 // La fuente Helvetica estándar del PDF solo cubre Latin-1: Δ, Ω, ≤ y similares salen
@@ -47,6 +50,14 @@ export function generarPDF(p, fotos = {}) {
   const { texto: dict, color: col } = dictamenPDF(p);
   doc.setDrawColor(...col); doc.setLineWidth(0.8); doc.rect(M, y, W - 2 * M, 14);
   doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.setTextColor(...col); doc.text(dict, M + 4, y + 9);
+  // Sello de aprobación (mismo diseño que pone el servidor), para informes generados aquí de una prueba ya aprobada
+  const sello = p.estado === "aprobada" && p.aprobacion ? `${p.aprobacion.nombre || "Supervisor"} · ${fechaPanama(p.aprobacion.fecha)}` : "";
+  if (sello) {
+    const verde = [31, 122, 69], sw = 82, sx = W - M - sw - 2, sy = y + 2;
+    doc.setFillColor(255, 255, 255); doc.setDrawColor(...verde); doc.setLineWidth(0.6); doc.rect(sx, sy, sw, 10, "FD");
+    doc.setTextColor(...verde); doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.text("APROBADO", sx + sw / 2, sy + 4.4, { align: "center" });
+    doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.text(sello, sx + sw / 2, sy + 8.2, { align: "center" });
+  }
   doc.setTextColor(20); y += 22;
 
   h2("Datos generales"); kv([["Cliente", g("cliente")], ["Ubicación", g("sitio")], ["TAG", g("tag")], ["Orden de trabajo", g("ot")], ["Técnico", g("tecnico")], ["Supervisor", g("supervisor")], ["Condiciones", `T amb ${g("tamb") || "s/d"} °C · HR ${g("hr") || "s/d"} %`]].map(r => [r[0], r[1] || ""])); after();
@@ -95,7 +106,8 @@ export function generarPDF(p, fotos = {}) {
   doc.line(M, y, M + 70, y); doc.line(W - M - 70, y, W - M, y); doc.setFontSize(8.5);
   doc.text("Técnico: " + (g("tecnico") || ""), M, y + 5); doc.text("Revisó: " + (g("supervisor") || ""), W - M - 70, y + 5);
   const n = doc.getNumberOfPages();
-  for (let i = 1; i <= n; i++) { doc.setPage(i); doc.setFontSize(7.5); doc.setTextColor(110); doc.text(`Normas de referencia: NFPA 70E, IEEE 43-2013, NEMA MG-1, NETA MTS-2023, ISO 20816-3 · Página ${i} de ${n}`, W / 2, 272, { align: "center" }); }
+  for (let i = 1; i <= n; i++) { doc.setPage(i); doc.setFontSize(7.5); doc.setTextColor(110); doc.text(`Normas de referencia: NFPA 70E, IEEE 43-2013, NEMA MG-1, NETA MTS-2023, ISO 20816-3 · Página ${i} de ${n}`, W / 2, 272, { align: "center" });
+    if (sello) { doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.setTextColor(31, 122, 69); doc.text(`APROBADO por ${sello} (hora de Panamá) · Informe ${folio(p)}`, W / 2, 275.6, { align: "center" }); doc.setFont("helvetica", "normal"); } }
   const nombre = `Informe-${(g("tag") || "motor").replace(/[^\w-]+/g, "_")}-${g("fecha") || ""}.pdf`;
   return { nombre, blob: doc.output("blob"), paginas: n };
 }

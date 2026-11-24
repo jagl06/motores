@@ -26,16 +26,19 @@ function guardarSesion(s) {
   dispatchEvent(new CustomEvent("pm-sesion"));
 }
 
-export async function pedir(metodo, ruta, cuerpo) {
+// opciones: { binario: Blob, tipo: "image/jpeg" } envía un archivo como cuerpo crudo; { blob: true } devuelve un Blob
+export async function pedir(metodo, ruta, cuerpo, opciones = {}) {
   const s = sesion();
+  const tipo = opciones.binario ? opciones.tipo : cuerpo !== undefined ? "application/json" : null;
   let r;
   try {
     r = await fetch(API_URL + ruta, {
       method: metodo, cache: "no-store",
-      headers: { ...(cuerpo !== undefined ? { "Content-Type": "application/json" } : {}), ...(s ? { Authorization: "Bearer " + s.token } : {}) },
-      body: cuerpo !== undefined ? JSON.stringify(cuerpo) : undefined
+      headers: { ...(tipo ? { "Content-Type": tipo } : {}), ...(s ? { Authorization: "Bearer " + s.token } : {}) },
+      body: opciones.binario || (cuerpo !== undefined ? JSON.stringify(cuerpo) : undefined)
     });
   } catch (e) { throw new ApiError(0); }
+  if (r.ok && opciones.blob) return r.blob();
   let datos = null;
   try { datos = await r.json(); } catch (e) { /* respuesta sin JSON */ }
   if (!r.ok) {
@@ -45,6 +48,8 @@ export async function pedir(metodo, ruta, cuerpo) {
   }
   return datos;
 }
+export const subirArchivo = (ruta, blob, tipo) => pedir("POST", ruta, undefined, { binario: blob, tipo });
+export const bajarArchivo = ruta => pedir("GET", ruta, undefined, { blob: true });
 
 export async function login(usuario, clave) {
   const d = await pedir("POST", "/auth/login", { usuario, clave });

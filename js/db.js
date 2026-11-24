@@ -3,7 +3,8 @@
 //   fotos:   un Blob JPEG por foto, clave uuid, índice por prueba
 //   meta:    pares clave-valor (prueba abierta, etc.)
 //   cola:    trabajos pendientes de sincronizar con la API (se usa desde la etapa 2)
-const NOMBRE = "motores-iselec", VERSION = 1;
+//   pdfs:    el informe generado al cerrar la prueba, pendiente de subir (desde la versión 2)
+const NOMBRE = "motores-iselec", VERSION = 2;
 let dbP = null;
 
 function abrir() {
@@ -15,6 +16,7 @@ function abrir() {
       if (!db.objectStoreNames.contains("fotos")) db.createObjectStore("fotos", { keyPath: "uuid" }).createIndex("prueba", "prueba");
       if (!db.objectStoreNames.contains("meta")) db.createObjectStore("meta");
       if (!db.objectStoreNames.contains("cola")) db.createObjectStore("cola", { keyPath: "id", autoIncrement: true });
+      if (!db.objectStoreNames.contains("pdfs")) db.createObjectStore("pdfs", { keyPath: "prueba" });
     };
     rq.onsuccess = () => res(rq.result);
     rq.onerror = () => { dbP = null; rej(rq.error); };
@@ -44,5 +46,9 @@ export const putFoto = f => tx("fotos", "readwrite", s => s.put(f));
 export const delFoto = id => tx("fotos", "readwrite", s => s.delete(id));
 export const fotosDePrueba = id => tx("fotos", "readonly", s => s.index("prueba").getAll(id));
 
-export const getMeta = k => tx("meta", "readonly", s => s.get(k));
+export const getPdf = id => tx("pdfs", "readonly", s => s.get(id));
+export const putPdf = p => tx("pdfs", "readwrite", s => s.put(p));
+export const delPdf = id => tx("pdfs", "readwrite", s => s.delete(id));
+
+export const getMeta =k => tx("meta", "readonly", s => s.get(k));
 export const setMeta = (k, v) => tx("meta", "readwrite", s => s.put(v, k));

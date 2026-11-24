@@ -1,7 +1,8 @@
 # Despliegue de la API en Bluehost (cPanel)
 
-La API vive en `api-motores.iselec.com.pa`. Es PHP 8 plano con PDO: no usa Composer en esta etapa
-ni procesos externos (`exec` y `shell_exec` están deshabilitados en el hosting).
+La API vive en `api-motores.iselec.com.pa`. Es PHP 8 plano con PDO, sin procesos externos (`exec` y
+`shell_exec` están deshabilitados en el hosting). Composer se usa solo para dos librerías en PHP puro,
+FPDF y FPDI, que ponen el sello de aprobación en el informe.
 
 ```
 api/
@@ -11,7 +12,8 @@ api/
 ├─ bin/           scripts de terminal: migrar.php, usuario.php
 ├─ cron/          limpieza.php
 ├─ config.php     ← se crea en el servidor; NO está en el repositorio
-└─ storage/       fotos y PDFs (etapa 3); NO está en el repositorio
+├─ vendor/        ← lo crea `composer install`; NO está en el repositorio
+└─ storage/       fotos y PDFs; lo crea la API; NO está en el repositorio
 ```
 
 Todo lo que no es `public/` queda fuera del alcance del servidor web. La API key de Anthropic
@@ -28,7 +30,7 @@ Todo lo que no es `public/` queda fuera del alcance del servidor web. La API key
    *Document Root* en `repositories/motores/api/public` (o `motores-api/public` si fue por SFTP).
    Bluehost crea el registro DNS. Verificar que AutoSSL emitió el certificado (*SSL/TLS Status*).
 4. **Versión de PHP.** cPanel → *MultiPHP Manager*: PHP 8.1 o superior para el subdominio.
-   Extensiones necesarias: `pdo_mysql`, `mbstring`, `json` (vienen activas por defecto).
+   Extensiones necesarias: `pdo_mysql`, `mbstring`, `json`, `fileinfo`, `iconv` (vienen activas por defecto).
 5. **Configuración.** En el *File Manager*, dentro de `api/`: copiar `config.example.php` como
    `config.php`, poner el DSN, usuario y clave de la base, y permisos `600`.
 6. **Tablas.** Con terminal (cPanel → *Terminal*, o SSH):
@@ -36,14 +38,21 @@ Todo lo que no es `public/` queda fuera del alcance del servidor web. La API key
    cd ~/repositories/motores/api && php bin/migrar.php
    ```
    Sin terminal: phpMyAdmin → seleccionar la base → *Import* → `sql/schema.sql`.
-7. **Primer usuario.**
+7. **Librerías del sello.** En la terminal:
+   ```
+   cd ~/repositories/motores/api && composer install --no-dev
+   ```
+   Si no hay `composer` en el servidor: correr ese comando en un equipo con PHP y subir la carpeta
+   `vendor/` resultante a `api/vendor/` por SFTP o File Manager. Sin `vendor/` la API funciona igual,
+   pero al aprobar no sella el PDF en el servidor (la app pone entonces el sello al generar el informe).
+8. **Primer usuario.**
    ```
    php bin/usuario.php crear jgonzalez "Nombre Apellido" admin
    ```
    Muestra una contraseña inicial una sola vez. El usuario la cambia desde la app.
    Sin terminal: crear un cron de una sola ejecución con ese comando y la salida a un archivo
    fuera de `public/` (`> ~/usuario.txt`), leerlo, y borrar el cron y el archivo.
-8. **Cron de limpieza.** cPanel → *Cron Jobs*, una vez al día:
+9. **Cron de limpieza.** cPanel → *Cron Jobs*, una vez al día:
    ```
    15 3 * * * /usr/local/bin/php /home/CUENTA/repositories/motores/api/cron/limpieza.php >/dev/null 2>&1
    ```
@@ -63,7 +72,11 @@ pasando la cabecera `Authorization`: revisar que `public/.htaccess` se haya subi
 
 1. `git push` a `main` desde el equipo de desarrollo.
 2. cPanel → *Git Version Control* → *Manage* → *Pull or Deploy* → **Update from Remote**.
-3. Si la versión trae migraciones nuevas: `php bin/migrar.php`.
+3. Si la versión trae migraciones nuevas: `php ~/repositories/motores/api/bin/migrar.php`.
+4. Si cambió `composer.json` o `composer.lock`: `cd ~/repositories/motores/api && composer install --no-dev`.
+
+Conviene actualizar la API justo después de cada `push`: el frontend nuevo se publica solo en un minuto y
+puede pedir rutas que la API vieja aún no tiene (la app lo tolera y deja los archivos pendientes).
 
 El frontend (GitHub Pages) y la API se actualizan por separado desde el mismo repositorio.
 
@@ -88,14 +101,14 @@ php bin/usuario.php crear tecnico1 "Técnico Uno" tecnico      > claves.txt
 php bin/usuario.php crear tecnico2 "Técnico Dos" tecnico      >> claves.txt
 php bin/usuario.php crear supervisor1 "Supervisora Uno" supervisor >> claves.txt
 php -S 127.0.0.1:8125 -t public public/index.php
-node ../tools/probar-api.js http://127.0.0.1:8125 claves.txt     # 57 comprobaciones
+node ../tools/probar-api.js http://127.0.0.1:8125 claves.txt     # 103 comprobaciones
 ```
 
 `probar-api.js` crea y cierra pruebas y bloquea un usuario ficticio: es solo para desarrollo y se
 niega a correr contra `iselec.com.pa`. Para usar la app local contra esa API, en la consola del
 navegador: `localStorage.pm_api = "http://localhost:8125"`.
 
-## Endpoints de esta etapa
+## Endpoints
 
 | Método | Ruta | Uso |
 |---|---|---|
@@ -107,6 +120,15 @@ navegador: `localStorage.pm_api = "http://localhost:8125"`.
 | GET | `/pruebas/{uuid}` | prueba completa |
 | PUT | `/pruebas/{uuid}` | `{rev, datos, resumen, cerrar}` crea o actualiza; 409 si hay conflicto |
 | POST | `/pruebas/{uuid}/cerrar` | cierra la prueba |
+| POST | `/pruebas/{uuid}/fotos?foto={uuid}&paso={id}` | sube una foto JPEG como cuerpo de la petición (máx. 5 MB) |
+| GET | `/pruebas/{uuid}/fotos/{foto}` | descarga una foto |
+| POST | `/pruebas/{uuid}/pdf` | sube el informe PDF como cuerpo de la petición (máx. 25 MB) |
+| GET | `/pruebas/{uuid}/pdf` | descarga el informe (el sellado si la prueba está aprobada) |
+| POST | `/pruebas/{uuid}/aprobar` | supervisor o administrador; exige prueba cerrada con su PDF y sus fotos |
+| POST | `/pruebas/{uuid}/devolver` | supervisor o administrador; `{motivo}`; la prueba vuelve a borrador |
 
-Límites del hosting que el código respeta: sin `exec`, sin triggers ni eventos de MySQL, una
-petición por prueba (sin fotos; cada foto irá en su propia petición en la etapa 3).
+Los archivos quedan en `api/storage/pruebas/{uuid}/` (fotos `{foto}.jpg`, `informe.pdf` e
+`informe-aprobado.pdf`). Para respaldar el sistema hay que copiar esa carpeta además de la base.
+
+Límites del hosting que el código respeta: sin `exec`, sin triggers ni eventos de MySQL, y cada foto
+en su propia petición (nunca la prueba completa con todas las fotos en una sola).

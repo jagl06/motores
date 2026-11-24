@@ -1,5 +1,6 @@
 // API simulada en memoria, SOLO para desarrollo local del frontend (login y sincronización).
-// Imita el contrato de api/ (PHP): mismas rutas, códigos y reglas de conflicto. No guarda nada en disco.
+// Imita el contrato de api/ (PHP) de la etapa 2: login, pruebas y conflictos. No guarda nada en disco.
+// No implementa fotos, PDF ni aprobación (etapa 3): para eso usar la API real en local (ver api/DEPLOY.md).
 // Uso: node tools/api-simulada.js [puerto]   y en la app (consola): localStorage.pm_api = "http://localhost:8124"
 // Usuarios de prueba: tecnico1, tecnico2 y supervisor1; contraseña "prueba-local-1234".
 import { createServer } from "node:http";
