@@ -160,6 +160,25 @@ r = await subir(`/pruebas/${u4}/pdf`, t1, PDF, "application/pdf"); espera("aprob
 r = await pedir("POST", `/pruebas/${u4}/devolver`, { token: ts, cuerpo: { motivo: "Ya no se puede" } }); espera("aprobada no se devuelve", r.e === 409, r);
 r = await pedir("GET", "/pruebas?estado=aprobada", { token: ts }); espera("filtro de aprobadas", r.d.pruebas.some(p => p.uuid === u4), r.d.pruebas?.length);
 
+// --- etapa 5: historial por motor
+const serieH = "HIST-" + randomUUID().slice(0, 8), hist = [];
+for (const [fecha, ir, pi] of [["2026-01-15", 900, 3.1], ["2026-06-20", 620, 2.6], ["2026-11-20", 310, 2.1]]) {
+  const id = randomUUID(); hist.push(id);
+  await pedir("PUT", "/pruebas/" + id, { token: fecha === "2026-06-20" ? t2 : t1, cuerpo: { rev: 0, datos: datos({ cliente: "Planta Historial", tag: "BH-1", serie: serieH, fecha }),
+    resumen: { fecha, t_devanado: 30, ir1: ir * 2, ir1_40c: ir, pi, dar: 1.4, resistencia: [{ prom: 0.62, prom_25c: 0.61, desbalance: 1.6 }, null], dictamen: null, sugerido: "Apto para operar" } } });
+}
+r = await pedir("GET", "/motores/" + encodeURIComponent(serieH) + "/historial", { token: t1 });
+espera("historial por serie: tres pruebas en orden de fecha", r.e === 200 && r.d.pruebas.length === 3 && r.d.pruebas.map(p => p.fecha).join() === "2026-01-15,2026-06-20,2026-11-20" && r.d.motores.length === 1, r.d);
+espera("historial: trae los valores del resumen", r.d.pruebas?.[2]?.resumen?.ir1_40c === 310 && r.d.pruebas?.[0]?.resumen?.pi === 3.1 && r.d.pruebas?.[0]?.resumen?.resistencia?.[1] === null, r.d.pruebas?.[2]);
+espera("historial: incluye pruebas de otros técnicos, sin sus datos completos", r.d.pruebas?.[1]?.tecnico === "Técnico Dos" && !("datos" in (r.d.pruebas?.[1] || {})), r.d.pruebas?.[1]);
+r = await pedir("GET", "/motores/historial?q=" + encodeURIComponent(serieH.toLowerCase().replace("-", " ")), { token: ts }); espera("historial: la serie se normaliza (minúsculas, espacios)", r.e === 200 && r.d.pruebas.length === 3, r.d);
+r = await pedir("GET", "/motores/historial?q=" + encodeURIComponent("BH-1") + "&cliente=" + encodeURIComponent("planta historial"), { token: t1 }); espera("historial por TAG y cliente", r.e === 200 && r.d.pruebas.length === 3, r.d);
+r = await pedir("GET", "/motores/historial?q=" + encodeURIComponent("BH-1") + "&cliente=" + encodeURIComponent("Otro Cliente"), { token: t1 }); espera("historial: mismo TAG en otro cliente no se mezcla", r.e === 200 && r.d.pruebas.length === 0, r.d);
+r = await pedir("GET", "/motores/historial?q=" + encodeURIComponent("NO-EXISTE-" + randomUUID()), { token: t1 }); espera("historial de un motor sin pruebas: lista vacía", r.e === 200 && r.d.pruebas.length === 0 && r.d.motores.length === 0, r.d);
+r = await pedir("GET", "/motores/historial?q=", { token: t1 }); espera("historial sin motor 400", r.e === 400, r);
+r = await pedir("GET", "/motores/" + encodeURIComponent(serieH) + "/historial"); espera("historial sin sesión 401", r.e === 401, r);
+r = await pedir("GET", "/motores/historial?q=" + encodeURIComponent("x' OR '1'='1"), { token: t1 }); espera("historial con comillas no rompe", r.e === 200 && r.d.pruebas.length === 0, r);
+
 // --- contraseña y sesión
 r = await pedir("POST", "/auth/clave", { token: t2, cuerpo: { actual: claves.tecnico2, nueva: "corta" } }); espera("clave nueva corta 422", r.e === 422, r);
 r = await pedir("POST", "/auth/clave", { token: t2, cuerpo: { actual: "no-es-la-actual", nueva: "una-clave-larga-1" } }); espera("clave actual mala 401", r.e === 401, r);

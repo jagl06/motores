@@ -9,6 +9,7 @@ require __DIR__ . '/../src/auth.php';
 require __DIR__ . '/../src/pruebas.php';
 require __DIR__ . '/../src/archivos.php';
 require __DIR__ . '/../src/revision.php';
+require __DIR__ . '/../src/historial.php';
 
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
@@ -36,6 +37,8 @@ try {
         ['GET',  '#^/pruebas/([0-9a-fA-F-]{36})/pdf$#',    'pdf_obtener'],
         ['POST', '#^/pruebas/([0-9a-fA-F-]{36})/aprobar$#',  'pruebas_aprobar'],
         ['POST', '#^/pruebas/([0-9a-fA-F-]{36})/devolver$#', 'pruebas_devolver'],
+        ['GET',  '#^/motores/historial$#',             'motores_historial'],
+        ['GET',  '#^/motores/([^/]{1,80})/historial$#', 'motores_historial'],
     ];
 
     $existe = false;

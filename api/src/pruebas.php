@@ -20,10 +20,16 @@ function puede_ver(array $u, array $fila): bool
     return $u['rol'] !== 'tecnico' || (int) $fila['tecnico_id'] === $u['id'];
 }
 
+/** Identificador normalizado: sin espacios, guiones, puntos ni barras, y en mayúsculas ("sn 12-3" → "SN123"). */
+function norm_id(?string $t): string
+{
+    return mb_strtoupper(preg_replace('/[\s\-_.\/]+/u', '', (string) $t) ?? '');
+}
+
 /** Clave que identifica al motor: serie si existe; si no, cliente + TAG. */
 function clave_motor(?string $cliente, ?string $serie, ?string $tag): ?string
 {
-    $norm = static fn(?string $t): string => mb_strtoupper(preg_replace('/[\s\-_.\/]+/u', '', (string) $t) ?? '');
+    $norm = 'norm_id';
     if ($norm($serie) !== '') {
         return mb_substr('S:' . $norm($serie), 0, 190);
     }
