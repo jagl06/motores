@@ -1,0 +1,17 @@
+{
+  "name": "Prueba de Motores ISELEC",
+  "short_name": "Motores",
+  "description": "Guía de prueba de motores de inducción trifásicos de 6 y 12 hilos, con criterios de aceptación e informe PDF.",
+  "lang": "es-PA",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#24384d",
+  "theme_color": "#24384d",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
