@@ -83,7 +83,7 @@ export function evalRes(p) {
     out.push(E("Desbalance de resistencia" + (groups.length > 1 ? (k ? " (T7-T12)" : " (T1-T6)") : ""), fmt(dev, 2) + " %", st,
       (dev <= 2 ? "Dentro de 2 %" : dev <= 5 ? "Entre 2 y 5 %: revisar conexiones y puntos de medición" : "Mayor a 5 %: posible espira en corto, conexión floja o error de conexión") + ". Promedio " + fmt(avg, 3) + " Ω" + (tw != null ? " · a 25 °C: " + fmt(avg * (234.5 + 25) / (234.5 + tw), 3) + " Ω" : "")));
   });
-  if (have.some(v => v < 1)) out.push(E("Resolución del instrumento", "0.1 Ω", "warn", "El Fluke 1587 FC resuelve 0.1 Ω. Con devanados menores a 1 Ω el desbalance no es confiable: usar micro-ohmímetro (método de 4 hilos)"));
+  if (have.some(v => v < 1)) out.push(E("Resolución del instrumento", "devanado < 1 Ω", "warn", "Con devanados menores a 1 Ω, un instrumento con resolución de 0.1 Ω no da un desbalance confiable: usar micro-ohmímetro (método de 4 hilos)"));
   return out;
 }
 

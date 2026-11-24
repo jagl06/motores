@@ -230,6 +230,12 @@ test("dictamenPDF: sin dictamen elegido el recuadro dice pendiente, en gris", ()
   igual(dictamenPDF(P({ dictamen: "Apto para operar" })).color.join(), "31,122,69");
 });
 
+test("ningún texto nombra marca o modelo de instrumento", () => {
+  const p = P({ hilos: "12", r1: .6, r2: .6, r3: .6, r4: .6, r5: .6, r6: .6, twind: 30, ir1: 850, pi: 2.5, dar: 1.4 }, true);
+  const textos = [...allEvals(p).flatMap(e => [e.label, e.value, e.note]), ...STEPS.flatMap(s => [s.title, s.intro, ...stepChecks(s, p), ...stepFields(s, p).map(f => f[1])])];
+  for (const t of textos) cierto(!/fluke|1587|megger|flir|hioki/i.test(t), "nombra un equipo: " + t);
+});
+
 /* ---------- protocolo ---------- */
 test("protocolo: 15 pasos con identificadores únicos", () => {
   igual(STEPS.length, 15);

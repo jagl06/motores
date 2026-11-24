@@ -5,7 +5,7 @@ import * as db from "./db.js";
 import { comprimir, aDataURL, deDataURL } from "./fotos.js";
 import { generarPDF } from "./pdf.js";
 
-export const VERSION = "1.0.2-etapa1";
+export const VERSION = "1.0.3-etapa1";
 
 /* ---------- utilidades ---------- */
 const $ = s => document.querySelector(s);
