@@ -16,6 +16,17 @@ async function pedir(metodo, ruta, { token, cuerpo, crudo, origen = ORIGEN } = {
   let d = null; const txt = await r.text(); try { d = JSON.parse(txt); } catch (e) { d = { _texto: txt.slice(0, 300) }; }
   return { e: r.status, d, h: r.headers };
 }
+// Sube un archivo como cuerpo crudo (así suben las fotos y el PDF)
+async function subir(ruta, token, bytes, tipo) {
+  const r = await fetch(URL_API + ruta, { method: "POST", headers: { Origin: ORIGEN, Authorization: "Bearer " + token, "Content-Type": tipo }, body: bytes });
+  let d = null; const txt = await r.text(); try { d = JSON.parse(txt); } catch (e) { d = { _texto: txt.slice(0, 300) }; }
+  return { e: r.status, d };
+}
+async function bajar(ruta, token) {
+  const r = await fetch(URL_API + ruta, { headers: { Origin: ORIGEN, ...(token ? { Authorization: "Bearer " + token } : {}) } });
+  return { e: r.status, tipo: r.headers.get("content-type"), bytes: Buffer.from(await r.arrayBuffer()) };
+}
+const fx = n => readFileSync(new URL("./fixtures/" + n, import.meta.url));
 let ok = 0; const fallas = [];
 function espera(nombre, cond, detalle) { if (cond) ok++; else fallas.push(nombre + (detalle !== undefined ? " → " + JSON.stringify(detalle).slice(0, 400) : "")); }
 const datos = (extra = {}) => ({ created: new Date().toISOString(), step: 3, vib: false, c: { termo_0: true }, obs: { termo: "Sin novedad, ñ á Ω" }, photos: {},
@@ -87,6 +98,66 @@ r = await pedir("POST", "/pruebas/" + u2 + "/cerrar", { token: t1 }); espera("no
 const u3 = randomUUID();
 r = await pedir("PUT", "/pruebas/" + u3, { token: t1, cuerpo: { rev: 0, cerrar: true, datos: datos({ serie: "SN-12345", dictamen: "No apto" }) } }); espera("crear ya cerrada (cierre sin conexión)", r.e === 201 && r.d.estado === "cerrada", r);
 r = await pedir("GET", "/pruebas?estado=cerrada", { token: t1 }); espera("filtro estado", r.d.pruebas.length >= 2 && r.d.pruebas.every(p => p.estado === "cerrada"), r.d.pruebas);
+
+// --- etapa 3: fotos, PDF, aprobar y devolver
+const JPG = fx("foto.jpg"), PDF = fx("informe.pdf");
+const u4 = randomUUID(), f1 = randomUUID(), f2 = randomUUID(), f3 = randomUUID();
+const conFotos = (extra = {}) => ({ ...datos({ tag: "FOTOS-1", serie: "SN-FOTOS", dictamen: "Apto para operar", ...extra }), created: "2026-11-24T00:00:00.000Z", photos: { placa: [f1], termo: [f2] } });
+const d4 = conFotos();
+r = await subir(`/pruebas/${u4}/fotos?foto=${f1}&paso=placa`, t1, JPG, "image/jpeg"); espera("foto de una prueba que aún no existe 404", r.e === 404, r);
+r = await pedir("PUT", "/pruebas/" + u4, { token: t1, cuerpo: { rev: 0, datos: d4 } }); espera("crear prueba con fotos", r.e === 201, r);
+r = await subir(`/pruebas/${u4}/fotos?foto=${f1}&paso=placa`, t1, JPG, "image/jpeg"); espera("subir foto 201", r.e === 201 && r.d.bytes === JPG.length, r);
+r = await subir(`/pruebas/${u4}/fotos?foto=${f1}&paso=placa`, t1, JPG, "image/jpeg"); espera("repetir la misma foto no duplica", r.e === 200 && r.d.repetida === true, r);
+r = await subir(`/pruebas/${u4}/fotos?foto=${f3}&paso=placa`, t1, fx("no-es-jpeg.png"), "image/jpeg"); espera("PNG disfrazado de JPEG 415", r.e === 415, r);
+r = await subir(`/pruebas/${u4}/fotos?foto=${f3}&paso=placa`, t1, Buffer.from("<?php echo 1; ?>"), "image/jpeg"); espera("PHP disfrazado de foto 415", r.e === 415, r);
+r = await subir(`/pruebas/${u4}/fotos?foto=${f3}&paso=placa`, t1, fx("foto-enorme.jpg"), "image/jpeg"); espera("foto de 5000 px 422", r.e === 422, r);
+r = await subir(`/pruebas/${u4}/fotos?foto=${f3}&paso=placa`, t1, Buffer.alloc(5300000, 1), "image/jpeg"); espera("foto de más de 5 MB 413", r.e === 413, r);
+r = await subir(`/pruebas/${u4}/fotos?foto=${f3}&paso=..%2F..%2Fx`, t1, JPG, "image/jpeg"); espera("paso con ruta rara 400", r.e === 400, r);
+r = await subir(`/pruebas/${u4}/fotos?foto=no-es-uuid&paso=placa`, t1, JPG, "image/jpeg"); espera("identificador de foto inválido 400", r.e === 400, r);
+r = await subir(`/pruebas/${u4}/fotos?foto=${f3}&paso=placa`, t2, JPG, "image/jpeg"); espera("otro técnico no sube fotos", r.e === 403, r);
+r = await subir(`/pruebas/${u2}/fotos?foto=${f1}&paso=placa`, t2, JPG, "image/jpeg"); espera("un uuid de foto no se reutiliza en otra prueba", r.e === 409 && r.d.codigo === "foto_ajena", r);
+r = await bajar(`/pruebas/${u4}/fotos/${f1}`, t1); espera("bajar foto idéntica", r.e === 200 && r.tipo === "image/jpeg" && r.bytes.equals(JPG), [r.e, r.tipo, r.bytes.length]);
+r = await bajar(`/pruebas/${u4}/fotos/${f1}`, ts); espera("el supervisor baja la foto", r.e === 200 && r.bytes.equals(JPG), r.e);
+r = await bajar(`/pruebas/${u4}/fotos/${f1}`, t2); espera("otro técnico no baja la foto", r.e === 403, r.e);
+r = await bajar(`/pruebas/${u4}/fotos/${f1}`); espera("sin sesión no baja la foto", r.e === 401, r.e);
+r = await bajar(`/pruebas/${u4}/fotos/${f2}`, t1); espera("foto que no ha subido 404", r.e === 404, r.e);
+
+r = await pedir("POST", `/pruebas/${u4}/aprobar`, { token: ts }); espera("no se aprueba un borrador", r.e === 409 && r.d.codigo === "no_cerrada", r);
+r = await pedir("PUT", "/pruebas/" + u4, { token: t1, cuerpo: { rev: 1, cerrar: true, datos: d4 } }); espera("cerrar la prueba con fotos", r.e === 200 && r.d.estado === "cerrada", r);
+r = await pedir("POST", `/pruebas/${u4}/aprobar`, { token: t1 }); espera("un técnico no aprueba", r.e === 403 && r.d.codigo === "sin_permiso", r);
+r = await pedir("POST", `/pruebas/${u4}/aprobar`, { token: ts }); espera("sin PDF no se aprueba", r.e === 409 && r.d.codigo === "falta_pdf", r);
+r = await bajar(`/pruebas/${u4}/pdf`, ts); espera("PDF que no ha subido 404", r.e === 404, r.e);
+r = await subir(`/pruebas/${u4}/pdf`, t1, Buffer.from("esto no es un pdf"), "application/pdf"); espera("texto disfrazado de PDF 415", r.e === 415, r);
+r = await subir(`/pruebas/${u4}/pdf`, t1, JPG, "application/pdf"); espera("JPEG disfrazado de PDF 415", r.e === 415, r);
+r = await subir(`/pruebas/${u4}/pdf`, t2, PDF, "application/pdf"); espera("otro técnico no sube el PDF", r.e === 403, r);
+r = await subir(`/pruebas/${u4}/pdf`, t1, PDF, "application/pdf"); espera("subir PDF estando cerrada", r.e === 201 && r.d.version === 1, r);
+r = await subir(`/pruebas/${u4}/pdf`, t1, PDF, "application/pdf"); espera("repetir el PDF no sube versión", r.e === 200 && r.d.repetido === true, r);
+r = await pedir("POST", `/pruebas/${u4}/aprobar`, { token: ts }); espera("con fotos pendientes no se aprueba", r.e === 409 && r.d.codigo === "faltan_fotos" && r.d.faltan === 1, r);
+r = await subir(`/pruebas/${u4}/fotos?foto=${f2}&paso=termo`, t1, JPG, "image/jpeg"); espera("la foto pendiente sube estando cerrada", r.e === 201, r);
+r = await pedir("GET", "/pruebas/" + u4, { token: ts }); espera("la prueba informa fotos y PDF en servidor", r.d.fotos?.length === 2 && r.d.pdf === true && r.d.aprobacion === null && r.d.devolucion === null, r.d);
+
+// devolver, corregir y volver a cerrar
+r = await pedir("POST", `/pruebas/${u4}/devolver`, { token: ts, cuerpo: { motivo: "" } }); espera("devolver sin motivo 422", r.e === 422, r);
+r = await pedir("POST", `/pruebas/${u4}/devolver`, { token: t1, cuerpo: { motivo: "No me gusta" } }); espera("un técnico no devuelve", r.e === 403, r);
+r = await pedir("POST", `/pruebas/${u4}/devolver`, { token: ts, cuerpo: { motivo: "Falta la foto de la placa legible" } }); espera("devolver", r.e === 200 && r.d.estado === "borrador" && r.d.devolucion?.motivo === "Falta la foto de la placa legible" && r.d.devolucion?.nombre === "Supervisora Uno", r);
+const revDev = r.d.rev;
+r = await pedir("GET", "/pruebas", { token: t1 }); espera("la lista marca la devuelta", r.d.pruebas.find(p => p.uuid === u4)?.devuelta === true, r.d.pruebas.find(p => p.uuid === u4));
+r = await pedir("POST", `/pruebas/${u4}/devolver`, { token: ts, cuerpo: { motivo: "Otra vez lo mismo" } }); espera("no se devuelve un borrador", r.e === 409, r);
+r = await pedir("PUT", "/pruebas/" + u4, { token: t1, cuerpo: { rev: revDev, cerrar: true, datos: conFotos({ sitio: "Corregida tras la devolución" }) } }); espera("el técnico corrige y vuelve a cerrar", r.e === 200 && r.d.estado === "cerrada", r);
+r = await pedir("GET", "/pruebas/" + u4, { token: t1 }); espera("al volver a cerrar se limpia la devolución", r.d.devolucion === null && r.d.estado === "cerrada", r.d.devolucion);
+
+// aprobar y sellar
+r = await pedir("POST", `/pruebas/${u4}/aprobar`, { token: ts }); espera("aprobar y sellar", r.e === 200 && r.d.estado === "aprobada" && r.d.sellado === true && r.d.aprobacion?.nombre === "Supervisora Uno", r);
+const revAp = r.d.rev;
+r = await pedir("POST", `/pruebas/${u4}/aprobar`, { token: ts }); espera("aprobar dos veces no cambia nada", r.e === 200 && r.d.rev === revAp, r);
+r = await bajar(`/pruebas/${u4}/pdf`, t1); const sellado = r.bytes;
+espera("el técnico baja el PDF sellado", r.e === 200 && r.tipo === "application/pdf" && sellado.subarray(0, 5).toString() === "%PDF-" && !sellado.equals(PDF) && sellado.length > PDF.length, [r.e, r.tipo, sellado.length]);
+r = await bajar(`/pruebas/${u4}/pdf`, t2); espera("otro técnico no baja el PDF", r.e === 403, r.e);
+r = await pedir("PUT", "/pruebas/" + u4, { token: t1, cuerpo: { rev: revAp, datos: conFotos({ sitio: "Cambio tras aprobar" }) } }); espera("aprobada no admite cambios", r.e === 409 && r.d.codigo === "cerrada" && r.d.estado === "aprobada", r);
+r = await subir(`/pruebas/${u4}/fotos?foto=${f3}&paso=placa`, t1, JPG, "image/jpeg"); espera("aprobada no admite fotos", r.e === 409, r);
+r = await subir(`/pruebas/${u4}/pdf`, t1, PDF, "application/pdf"); espera("aprobada no admite otro PDF", r.e === 409, r);
+r = await pedir("POST", `/pruebas/${u4}/devolver`, { token: ts, cuerpo: { motivo: "Ya no se puede" } }); espera("aprobada no se devuelve", r.e === 409, r);
+r = await pedir("GET", "/pruebas?estado=aprobada", { token: ts }); espera("filtro de aprobadas", r.d.pruebas.some(p => p.uuid === u4), r.d.pruebas?.length);
 
 // --- contraseña y sesión
 r = await pedir("POST", "/auth/clave", { token: t2, cuerpo: { actual: claves.tecnico2, nueva: "corta" } }); espera("clave nueva corta 422", r.e === 422, r);

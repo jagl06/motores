@@ -71,6 +71,7 @@ function prueba_resumida(array $f): array
         'cliente' => $f['cliente'], 'tag' => $f['tag'], 'serie' => $f['serie'], 'orden' => $f['orden'],
         'fecha' => $f['fecha'], 'dictamen' => $f['dictamen'],
         'tecnico' => $f['tecnico_nombre'] ?? null, 'tecnico_id' => (int) $f['tecnico_id'],
+        'devuelta' => $f['estado'] === 'borrador' && ($f['devuelta_motivo'] ?? null) !== null,
         'actualizado_en' => iso($f['actualizado_en']),
     ];
 }
@@ -96,7 +97,7 @@ function pruebas_listar(): void
     if (in_array($_GET['estado'] ?? '', ['borrador', 'cerrada', 'aprobada'], true)) {
         $cond[] = 'p.estado = ?'; $par[] = $_GET['estado'];
     }
-    $sql = 'SELECT p.uuid, p.rev, p.estado, p.cliente, p.tag, p.serie, p.orden, p.fecha, p.dictamen, p.tecnico_id, p.actualizado_en, u.nombre AS tecnico_nombre
+    $sql = 'SELECT p.uuid, p.rev, p.estado, p.cliente, p.tag, p.serie, p.orden, p.fecha, p.dictamen, p.tecnico_id, p.devuelta_motivo, p.actualizado_en, u.nombre AS tecnico_nombre
               FROM pruebas p JOIN usuarios u ON u.id = p.tecnico_id'
          . ($cond ? ' WHERE ' . implode(' AND ', $cond) : '')
          . ' ORDER BY p.actualizado_en DESC LIMIT 300';
@@ -125,8 +126,24 @@ function prueba_completa(array $f): array
     return prueba_resumida($f) + [
         'datos' => json_decode($f['datos']), // como objeto: conserva {} vacíos
         'cerrada_en' => iso($f['cerrada_en']),
-        'aprobada_en' => iso($f['aprobada_en']),
-    ];
+        'fotos' => fotos_en_servidor($f['uuid']),
+        'pdf' => tiene_pdf($f['uuid']),
+    ] + revision_de($f);
+}
+
+/** Identificadores de las fotos de la prueba que ya están en el servidor. @return string[] */
+function fotos_en_servidor(string $uuid): array
+{
+    $st = db()->prepare('SELECT uuid FROM fotos WHERE prueba_uuid = ?');
+    $st->execute([$uuid]);
+    return $st->fetchAll(PDO::FETCH_COLUMN);
+}
+
+function tiene_pdf(string $uuid): bool
+{
+    $st = db()->prepare('SELECT 1 FROM pdfs WHERE prueba_uuid = ?');
+    $st->execute([$uuid]);
+    return $st->fetchColumn() !== false;
 }
 
 // GET /pruebas/{uuid}
@@ -224,8 +241,8 @@ function pruebas_guardar(string $uuid): void
         }
 
         $cols += ['rev' => $rev + 1];
-        if ($cerrar) {
-            $cols += ['estado' => 'cerrada', 'cerrada_en' => $t];
+        if ($cerrar) { // al volver a cerrar tras una devolución, el motivo ya quedó atendido
+            $cols += ['estado' => 'cerrada', 'cerrada_en' => $t, 'devuelta_en' => null, 'devuelta_por' => null, 'devuelta_motivo' => null];
         }
         $set = implode(', ', array_map(static fn(string $k): string => "$k = ?", array_keys($cols)));
         $pdo->prepare("UPDATE pruebas SET $set WHERE uuid = ?")->execute([...array_values($cols), $uuid]);
@@ -256,7 +273,7 @@ function pruebas_cerrar(string $uuid): void
                 throw new ErrorHttp(422, 'Para cerrar la prueba hay que elegir el dictamen', 'sin_dictamen');
             }
             $t = ahora();
-            $pdo->prepare("UPDATE pruebas SET estado = 'cerrada', cerrada_en = ?, actualizado_en = ?, rev = rev + 1 WHERE uuid = ?")->execute([$t, $t, $uuid]);
+            $pdo->prepare("UPDATE pruebas SET estado = 'cerrada', cerrada_en = ?, devuelta_en = NULL, devuelta_por = NULL, devuelta_motivo = NULL, actualizado_en = ?, rev = rev + 1 WHERE uuid = ?")->execute([$t, $t, $uuid]);
             $f = prueba_o_404($uuid);
         }
         $pdo->commit();

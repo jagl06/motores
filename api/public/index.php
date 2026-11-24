@@ -7,6 +7,8 @@ declare(strict_types=1);
 require __DIR__ . '/../src/nucleo.php';
 require __DIR__ . '/../src/auth.php';
 require __DIR__ . '/../src/pruebas.php';
+require __DIR__ . '/../src/archivos.php';
+require __DIR__ . '/../src/revision.php';
 
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
@@ -28,6 +30,12 @@ try {
         ['GET',  '#^/pruebas/([0-9a-fA-F-]{36})$#',        'pruebas_obtener'],
         ['PUT',  '#^/pruebas/([0-9a-fA-F-]{36})$#',        'pruebas_guardar'],
         ['POST', '#^/pruebas/([0-9a-fA-F-]{36})/cerrar$#', 'pruebas_cerrar'],
+        ['POST', '#^/pruebas/([0-9a-fA-F-]{36})/fotos$#',  'fotos_subir'],
+        ['GET',  '#^/pruebas/([0-9a-fA-F-]{36})/fotos/([0-9a-fA-F-]{36})$#', 'fotos_obtener'],
+        ['POST', '#^/pruebas/([0-9a-fA-F-]{36})/pdf$#',    'pdf_subir'],
+        ['GET',  '#^/pruebas/([0-9a-fA-F-]{36})/pdf$#',    'pdf_obtener'],
+        ['POST', '#^/pruebas/([0-9a-fA-F-]{36})/aprobar$#',  'pruebas_aprobar'],
+        ['POST', '#^/pruebas/([0-9a-fA-F-]{36})/devolver$#', 'pruebas_devolver'],
     ];
 
     $existe = false;

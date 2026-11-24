@@ -1,0 +1,15 @@
+{
+    "name": "iselec/motores-api",
+    "description": "API de la app de prueba de motores ISELEC. Composer solo se usa para sellar el PDF aprobado.",
+    "type": "project",
+    "license": "proprietary",
+    "require": {
+        "php": ">=8.0",
+        "setasign/fpdf": "^1.8",
+        "setasign/fpdi": "^2.6"
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true
+    }
+}
