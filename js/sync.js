@@ -96,18 +96,22 @@ async function subir(p) {
   await ganchos.parchar(p.uuid, { rev: resp.rev, estado: resp.estado, estadoServidor: resp.estado, sincronizada: resp.actualizado_en, errorSync: null, duenoId: sesion().usuario.id }, marca);
 }
 
+// Los archivos se envían como "application/octet-stream": el cortafuegos del hosting (ModSecurity) rechaza
+// con 406 un POST cuyo Content-Type sea application/pdf. El servidor no se fía de esta cabecera:
+// valida el contenido real del archivo.
+const TIPO_SUBIDA = "application/octet-stream";
 const referenciadas = p => new Set(Object.values(p.photos || {}).flat());
 const fotosPendientes = async p => { const ref = referenciadas(p); return (await db.fotosDePrueba(p.uuid)).filter(f => !f.subida && ref.has(f.uuid)); };
 
 // Fotos: una por petición, cada una con su uuid (repetir no duplica). Después, el informe PDF si la prueba está cerrada.
 async function subirArchivos(p, r) {
   for (const f of await fotosPendientes(p)) {
-    await subirArchivo(`/pruebas/${p.uuid}/fotos?foto=${f.uuid}&paso=${encodeURIComponent(f.paso)}`, f.blob, "image/jpeg");
+    await subirArchivo(`/pruebas/${p.uuid}/fotos?foto=${f.uuid}&paso=${encodeURIComponent(f.paso)}`, f.blob, TIPO_SUBIDA);
     await db.putFoto({ ...f, subida: true }); r.fotos++;
   }
   const pdf = await db.getPdf(p.uuid);
   if (pdf && !pdf.subido && p.estado === "cerrada") {
-    await subirArchivo(`/pruebas/${p.uuid}/pdf`, pdf.blob, "application/pdf");
+    await subirArchivo(`/pruebas/${p.uuid}/pdf`, pdf.blob, TIPO_SUBIDA);
     await db.putPdf({ ...pdf, subido: true }); r.informes++;
   }
   // Se vuelve a mirar por si entró una foto mientras subían las anteriores

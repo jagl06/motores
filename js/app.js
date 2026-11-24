@@ -7,7 +7,7 @@ import { generarPDF } from "./pdf.js";
 import { sesion, login, logout, cambiarClave, ApiError } from "./api.js";
 import * as sync from "./sync.js";
 
-export const VERSION = "1.2.0-etapa3";
+export const VERSION = "1.2.1-etapa3";
 
 /* ---------- utilidades ---------- */
 const $ = s => document.querySelector(s);

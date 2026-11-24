@@ -101,7 +101,7 @@ php bin/usuario.php crear tecnico1 "Técnico Uno" tecnico      > claves.txt
 php bin/usuario.php crear tecnico2 "Técnico Dos" tecnico      >> claves.txt
 php bin/usuario.php crear supervisor1 "Supervisora Uno" supervisor >> claves.txt
 php -S 127.0.0.1:8125 -t public public/index.php
-node ../tools/probar-api.js http://127.0.0.1:8125 claves.txt     # 103 comprobaciones
+node ../tools/probar-api.js http://127.0.0.1:8125 claves.txt     # 104 comprobaciones
 ```
 
 `probar-api.js` crea y cierra pruebas y bloquea un usuario ficticio: es solo para desarrollo y se
@@ -126,6 +126,10 @@ navegador: `localStorage.pm_api = "http://localhost:8125"`.
 | GET | `/pruebas/{uuid}/pdf` | descarga el informe (el sellado si la prueba está aprobada) |
 | POST | `/pruebas/{uuid}/aprobar` | supervisor o administrador; exige prueba cerrada con su PDF y sus fotos |
 | POST | `/pruebas/{uuid}/devolver` | supervisor o administrador; `{motivo}`; la prueba vuelve a borrador |
+
+La app envía fotos e informes con `Content-Type: application/octet-stream`: el ModSecurity de Bluehost
+responde 406 a un POST con `Content-Type: application/pdf` antes de que llegue a PHP. La API no usa esa
+cabecera; valida el contenido real del archivo.
 
 Los archivos quedan en `api/storage/pruebas/{uuid}/` (fotos `{foto}.jpg`, `informe.pdf` e
 `informe-aprobado.pdf`). Para respaldar el sistema hay que copiar esa carpeta además de la base.

@@ -130,10 +130,11 @@ r = await bajar(`/pruebas/${u4}/pdf`, ts); espera("PDF que no ha subido 404", r.
 r = await subir(`/pruebas/${u4}/pdf`, t1, Buffer.from("esto no es un pdf"), "application/pdf"); espera("texto disfrazado de PDF 415", r.e === 415, r);
 r = await subir(`/pruebas/${u4}/pdf`, t1, JPG, "application/pdf"); espera("JPEG disfrazado de PDF 415", r.e === 415, r);
 r = await subir(`/pruebas/${u4}/pdf`, t2, PDF, "application/pdf"); espera("otro técnico no sube el PDF", r.e === 403, r);
-r = await subir(`/pruebas/${u4}/pdf`, t1, PDF, "application/pdf"); espera("subir PDF estando cerrada", r.e === 201 && r.d.version === 1, r);
+r = await subir(`/pruebas/${u4}/pdf`, t1, PDF, "application/octet-stream"); espera("subir PDF estando cerrada (como lo envía la app)", r.e === 201 && r.d.version === 1, r);
 r = await subir(`/pruebas/${u4}/pdf`, t1, PDF, "application/pdf"); espera("repetir el PDF no sube versión", r.e === 200 && r.d.repetido === true, r);
 r = await pedir("POST", `/pruebas/${u4}/aprobar`, { token: ts }); espera("con fotos pendientes no se aprueba", r.e === 409 && r.d.codigo === "faltan_fotos" && r.d.faltan === 1, r);
-r = await subir(`/pruebas/${u4}/fotos?foto=${f2}&paso=termo`, t1, JPG, "image/jpeg"); espera("la foto pendiente sube estando cerrada", r.e === 201, r);
+r = await subir(`/pruebas/${u4}/fotos?foto=${f2}&paso=termo`, t1, JPG, "application/octet-stream"); espera("la foto pendiente sube estando cerrada (como la envía la app)", r.e === 201, r);
+r = await subir(`/pruebas/${u4}/fotos?foto=${f3}&paso=termo`, t1, Buffer.from("<?php echo 1; ?>"), "application/octet-stream"); espera("octet-stream no se salta la validación del contenido", r.e === 415, r);
 r = await pedir("GET", "/pruebas/" + u4, { token: ts }); espera("la prueba informa fotos y PDF en servidor", r.d.fotos?.length === 2 && r.d.pdf === true && r.d.aprobacion === null && r.d.devolucion === null, r.d);
 
 // devolver, corregir y volver a cerrar
