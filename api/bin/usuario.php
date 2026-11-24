@@ -5,6 +5,8 @@ declare(strict_types=1);
 //   php bin/usuario.php crear <usuario> "<Nombre Apellido>" <tecnico|supervisor|admin>
 //   php bin/usuario.php clave <usuario>          genera una contraseña nueva y cierra sus sesiones
 //   php bin/usuario.php rol <usuario> <rol>
+//   php bin/usuario.php renombrar <usuario> <usuario_nuevo>   conserva clave, rol y pruebas
+//   php bin/usuario.php nombre <usuario> "<Nombre Apellido>"  el nombre que sale en la app y los informes
 //   php bin/usuario.php desactivar <usuario>     (activar <usuario> lo revierte)
 //   php bin/usuario.php listar
 // La contraseña se genera al azar y se muestra UNA sola vez: entrégala al usuario,
@@ -44,7 +46,7 @@ if ($accion === 'listar') {
     exit(0);
 }
 if ($usuario === null || !preg_match('/^[a-z0-9._-]{3,60}$/', $usuario)) {
-    fin("Uso: php bin/usuario.php crear|clave|rol|desactivar|activar|listar <usuario> ...\nEl usuario lleva de 3 a 60 letras minúsculas, números, punto, guion o guion bajo.", 1);
+    fin("Uso: php bin/usuario.php crear|clave|rol|renombrar|nombre|desactivar|activar|listar <usuario> ...\nEl usuario lleva de 3 a 60 letras minúsculas, números, punto, guion o guion bajo.", 1);
 }
 
 if ($accion === 'crear') {
@@ -80,6 +82,28 @@ switch ($accion) {
         }
         $pdo->prepare('UPDATE usuarios SET rol = ? WHERE id = ?')->execute([$a3, $id]);
         fin("$usuario ahora es $a3.");
+    case 'renombrar':
+        $nuevo = $a3 !== null ? mb_strtolower(trim($a3)) : '';
+        if (!preg_match('/^[a-z0-9._-]{3,60}$/', $nuevo)) {
+            fin("Uso: php bin/usuario.php renombrar <usuario> <usuario_nuevo>
+El usuario lleva de 3 a 60 letras minúsculas, números, punto, guion o guion bajo.", 1);
+        }
+        if ($nuevo === $usuario) {
+            fin("El usuario ya se llama $usuario.", 1);
+        }
+        try {
+            $pdo->prepare('UPDATE usuarios SET usuario = ? WHERE id = ?')->execute([$nuevo, $id]);
+        } catch (PDOException $e) {
+            fin($e->getCode() === '23000' ? "El usuario $nuevo ya existe." : 'Error: ' . $e->getMessage(), 1);
+        }
+        fin("$usuario ahora entra como $nuevo, con la misma contraseña. Sus pruebas y sesiones no cambian.");
+    case 'nombre':
+        $nombre = mb_substr(trim((string) $a3), 0, 120);
+        if ($nombre === '') {
+            fin('Uso: php bin/usuario.php nombre <usuario> "<Nombre Apellido>"', 1);
+        }
+        $pdo->prepare('UPDATE usuarios SET nombre = ? WHERE id = ?')->execute([$nombre, $id]);
+        fin("$usuario ahora se muestra como $nombre. Los informes ya generados conservan el nombre anterior.");
     case 'desactivar':
     case 'activar':
         $pdo->prepare('UPDATE usuarios SET activo = ? WHERE id = ?')->execute([$accion === 'activar' ? 1 : 0, $id]);

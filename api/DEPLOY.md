@@ -116,6 +116,8 @@ php bin/usuario.php listar
 php bin/usuario.php crear <usuario> "<Nombre>" <tecnico|supervisor|admin>
 php bin/usuario.php clave <usuario>        # contraseña nueva; cierra sus sesiones
 php bin/usuario.php rol <usuario> <rol>
+php bin/usuario.php renombrar <usuario> <usuario_nuevo>    # conserva clave, rol y pruebas
+php bin/usuario.php nombre <usuario> "<Nombre Apellido>"   # el nombre que sale en la app y los informes
 php bin/usuario.php desactivar <usuario>   # activar <usuario> lo revierte
 ```
 
